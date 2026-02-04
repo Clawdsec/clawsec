@@ -1,8 +1,8 @@
 /**
  * Tool Result Persist Hook Handler
  *
- * Hook handler that scans tool outputs for secrets/PII and filters
- * sensitive data before it's persisted.
+ * Hook handler that scans tool outputs for secrets/PII, prompt injections,
+ * and filters sensitive data before it's persisted.
  */
 
 import type {
@@ -13,6 +13,8 @@ import type {
 import type { ClawsecConfig } from '../../config/schema.js';
 import type { SecretsDetectionResult } from '../../detectors/secrets/types.js';
 import { createSecretsDetector } from '../../detectors/secrets/index.js';
+import { scan, sanitize } from '../../sanitization/scanner.js';
+import type { ScannerConfig } from '../../sanitization/types.js';
 import { filterOutput } from './filter.js';
 
 /**
@@ -24,6 +26,11 @@ export interface ToolResultPersistHandlerOptions {
    * @default true
    */
   filter?: boolean;
+  /**
+   * Whether to enable prompt injection scanning
+   * @default true
+   */
+  scanInjections?: boolean;
 }
 
 /**
@@ -32,6 +39,18 @@ export interface ToolResultPersistHandlerOptions {
 function createAllowResult(): ToolResultPersistResult {
   return {
     allow: true,
+  };
+}
+
+/**
+ * Create a block result for detected prompt injections
+ */
+function createBlockResult(
+  redactions: Array<{ type: string; description: string }>
+): ToolResultPersistResult {
+  return {
+    allow: false,
+    redactions,
   };
 }
 
@@ -50,17 +69,33 @@ function createFilteredResult(
 }
 
 /**
+ * Convert tool output to string for scanning
+ */
+function outputToString(output: unknown): string | undefined {
+  if (typeof output === 'string') {
+    return output;
+  }
+  if (output !== null && output !== undefined) {
+    return JSON.stringify(output);
+  }
+  return undefined;
+}
+
+/**
  * Create the tool-result-persist handler
  *
  * This handler runs after a tool executes but before the result is persisted.
- * It scans the output for secrets/PII and redacts sensitive data.
+ * It scans the output for secrets/PII and prompt injections, then redacts
+ * or blocks sensitive data.
  *
  * Flow:
  * 1. Check if plugin is enabled
- * 2. Check if filtering is enabled
- * 3. Run secrets detector on tool output
- * 4. Filter output if secrets detected
- * 5. Return result with filtered output and redaction metadata
+ * 2. Check if filtering/scanning is enabled
+ * 3. Run prompt injection scanner on tool output
+ * 4. If injection detected with block action, block the output
+ * 5. Run secrets detector on tool output
+ * 6. Filter output if secrets detected
+ * 7. Return result with filtered output and redaction metadata
  *
  * @param config - Clawsec configuration
  * @param options - Optional handler options
@@ -71,6 +106,7 @@ export function createToolResultPersistHandler(
   options?: ToolResultPersistHandlerOptions
 ): ToolResultPersistHandler {
   const filterEnabled = options?.filter ?? true;
+  const scanInjectionsEnabled = options?.scanInjections ?? true;
 
   // Create secrets detector from config
   const secretsDetector = createSecretsDetector({
@@ -79,31 +115,61 @@ export function createToolResultPersistHandler(
     action: config.rules?.secrets?.action ?? 'block',
   });
 
+  // Create scanner config from sanitization rules
+  const sanitizationConfig = config.rules?.sanitization;
+  const scannerConfig: ScannerConfig = {
+    enabled: sanitizationConfig?.enabled ?? true,
+    categories: {
+      instructionOverride: sanitizationConfig?.categories?.instructionOverride ?? true,
+      systemLeak: sanitizationConfig?.categories?.systemLeak ?? true,
+      jailbreak: sanitizationConfig?.categories?.jailbreak ?? true,
+      encodedPayload: sanitizationConfig?.categories?.encodedPayload ?? true,
+    },
+    minConfidence: sanitizationConfig?.minConfidence ?? 0.5,
+    redactMatches: sanitizationConfig?.redactMatches ?? false,
+  };
+
   return async (context: ToolResultContext): Promise<ToolResultPersistResult> => {
     // 1. Check if plugin is globally disabled
     if (config.global?.enabled === false) {
       return createAllowResult();
     }
 
-    // 2. Check if filtering is disabled via options
-    if (!filterEnabled) {
-      return createAllowResult();
+    // Convert output to string for scanning
+    const toolOutputString = outputToString(context.toolOutput);
+
+    // 2. Run prompt injection scanner if enabled
+    if (scanInjectionsEnabled && sanitizationConfig?.enabled !== false && toolOutputString) {
+      const scanResult = scan(toolOutputString, scannerConfig);
+
+      if (scanResult.hasInjection) {
+        const injectionRedactions = scanResult.matches.map(match => ({
+          type: `injection-${match.category}`,
+          description: `Prompt injection detected: ${match.match.substring(0, 50)}${match.match.length > 50 ? '...' : ''}`,
+        }));
+
+        // If action is 'block', reject the output entirely
+        if (sanitizationConfig?.action === 'block') {
+          return createBlockResult(injectionRedactions);
+        }
+
+        // If redactMatches is enabled, sanitize the output
+        if (sanitizationConfig?.redactMatches) {
+          const sanitizedOutput = sanitize(toolOutputString, scanResult.matches);
+          return createFilteredResult(sanitizedOutput, injectionRedactions);
+        }
+
+        // Otherwise, just log/warn and continue
+        // The redactions are passed for logging purposes
+      }
     }
 
-    // 3. Check if secrets detection is disabled in config
-    if (config.rules?.secrets?.enabled === false) {
+    // 3. Check if secrets filtering is disabled
+    if (!filterEnabled || config.rules?.secrets?.enabled === false) {
       return createAllowResult();
     }
 
     // 4. Run secrets detector on the tool output
-    // Convert toolOutput to string for the detector (it expects string | undefined)
-    const toolOutputString =
-      typeof context.toolOutput === 'string'
-        ? context.toolOutput
-        : context.toolOutput !== null && context.toolOutput !== undefined
-          ? JSON.stringify(context.toolOutput)
-          : undefined;
-
     let detections: SecretsDetectionResult[] = [];
     try {
       detections = await secretsDetector.detectAll({
@@ -117,8 +183,7 @@ export function createToolResultPersistHandler(
       return createAllowResult();
     }
 
-    // 5. If no secrets detected, check output directly with pattern matching
-    // This catches secrets the detector might have missed
+    // 5. Filter output with pattern matching (catches secrets detector might have missed)
     const filterResult = filterOutput(context.toolOutput, detections);
 
     // 6. If nothing was redacted, allow through unchanged
@@ -181,6 +246,19 @@ export function createDefaultToolResultPersistHandler(): ToolResultPersistHandle
         enabled: true,
         severity: 'high',
         action: 'block',
+      },
+      sanitization: {
+        enabled: true,
+        severity: 'high',
+        action: 'block',
+        minConfidence: 0.5,
+        redactMatches: false,
+        categories: {
+          instructionOverride: true,
+          systemLeak: true,
+          jailbreak: true,
+          encodedPayload: true,
+        },
       },
     },
     approval: {

@@ -92,6 +92,20 @@ export const defaultConfig: ClawsecConfig = {
       severity: 'high',
       action: 'block',
     },
+
+    sanitization: {
+      enabled: true,
+      severity: 'high',
+      action: 'block',
+      minConfidence: 0.5,
+      redactMatches: false,
+      categories: {
+        instructionOverride: true,
+        systemLeak: true,
+        jailbreak: true,
+        encodedPayload: true,
+      },
+    },
   },
 
   approval: {

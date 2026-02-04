@@ -218,6 +218,66 @@ export const DestructiveRuleSchema = z.object({
 export type DestructiveRule = z.infer<typeof DestructiveRuleSchema>;
 
 // =============================================================================
+// OUTPUT SANITIZATION CONFIGURATION
+// =============================================================================
+
+/**
+ * Injection scanner category configuration
+ */
+export const InjectionCategoriesSchema = z.object({
+  /** Detect instruction override attempts */
+  instructionOverride: z.boolean().default(true),
+  /** Detect system prompt leak attempts */
+  systemLeak: z.boolean().default(true),
+  /** Detect jailbreak patterns */
+  jailbreak: z.boolean().default(true),
+  /** Detect encoded payloads */
+  encodedPayload: z.boolean().default(true),
+}).default(() => ({
+  instructionOverride: true,
+  systemLeak: true,
+  jailbreak: true,
+  encodedPayload: true,
+}));
+export type InjectionCategories = z.infer<typeof InjectionCategoriesSchema>;
+
+/**
+ * Output sanitization rule configuration
+ */
+export const SanitizationRuleSchema = z.object({
+  /** Whether output sanitization is enabled */
+  enabled: z.boolean().default(true),
+  /** Severity level for injection detections */
+  severity: SeveritySchema.default('high'),
+  /** Action to take when injection is detected */
+  action: ActionSchema.default('block'),
+  /** Minimum confidence threshold (0.0-1.0) */
+  minConfidence: z.number().min(0).max(1).default(0.5),
+  /** Whether to redact detected injections (vs blocking entirely) */
+  redactMatches: z.boolean().default(false),
+  /** Categories to scan for */
+  categories: InjectionCategoriesSchema.optional().default(() => ({
+    instructionOverride: true,
+    systemLeak: true,
+    jailbreak: true,
+    encodedPayload: true,
+  })),
+}).default(() => ({
+  enabled: true,
+  severity: 'high' as const,
+  action: 'block' as const,
+  minConfidence: 0.5,
+  redactMatches: false,
+  categories: {
+    instructionOverride: true,
+    systemLeak: true,
+    jailbreak: true,
+    encodedPayload: true,
+  },
+}));
+export type SanitizationRule = z.infer<typeof SanitizationRuleSchema>;
+
+// =============================================================================
 // SECRETS/PII RULE CONFIGURATION
 // =============================================================================
 
@@ -305,6 +365,20 @@ export const RulesConfigSchema = z.object({
     severity: 'high' as const,
     action: 'block' as const,
   })),
+  /** Output sanitization rules */
+  sanitization: SanitizationRuleSchema.optional().default(() => ({
+    enabled: true,
+    severity: 'high' as const,
+    action: 'block' as const,
+    minConfidence: 0.5,
+    redactMatches: false,
+    categories: {
+      instructionOverride: true,
+      systemLeak: true,
+      jailbreak: true,
+      encodedPayload: true,
+    },
+  })),
 }).default(() => ({
   purchase: {
     enabled: true,
@@ -338,6 +412,19 @@ export const RulesConfigSchema = z.object({
     enabled: true,
     severity: 'high' as const,
     action: 'block' as const,
+  },
+  sanitization: {
+    enabled: true,
+    severity: 'high' as const,
+    action: 'block' as const,
+    minConfidence: 0.5,
+    redactMatches: false,
+    categories: {
+      instructionOverride: true,
+      systemLeak: true,
+      jailbreak: true,
+      encodedPayload: true,
+    },
   },
 }));
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;
@@ -477,6 +564,19 @@ export const ClawsecConfigSchema = z.object({
       severity: 'high' as const,
       action: 'block' as const,
     },
+    sanitization: {
+      enabled: true,
+      severity: 'high' as const,
+      action: 'block' as const,
+      minConfidence: 0.5,
+      redactMatches: false,
+      categories: {
+        instructionOverride: true,
+        systemLeak: true,
+        jailbreak: true,
+        encodedPayload: true,
+      },
+    },
   })),
   /** Approval flow settings */
   approval: ApprovalConfigSchema.optional().default(() => ({
@@ -521,6 +621,19 @@ export const ClawsecConfigSchema = z.object({
       enabled: true,
       severity: 'high' as const,
       action: 'block' as const,
+    },
+    sanitization: {
+      enabled: true,
+      severity: 'high' as const,
+      action: 'block' as const,
+      minConfidence: 0.5,
+      redactMatches: false,
+      categories: {
+        instructionOverride: true,
+        systemLeak: true,
+        jailbreak: true,
+        encodedPayload: true,
+      },
     },
   },
   approval: {
