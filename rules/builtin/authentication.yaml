@@ -1,0 +1,56 @@
+# Authentication Security Rules
+# Protects authentication credentials and tokens
+
+name: authentication
+description: Protects authentication credentials and sensitive tokens
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # JWT Tokens
+      - "eyJ[a-zA-Z0-9_-]*\\.eyJ[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]*"
+
+      # API Keys (generic patterns)
+      - "api[_-]?key\\s*[:=]\\s*['\"]?[a-zA-Z0-9_-]{20,}['\"]?"
+      - "api[_-]?secret\\s*[:=]\\s*['\"]?[a-zA-Z0-9_-]{20,}['\"]?"
+
+      # OAuth tokens
+      - "access[_-]?token\\s*[:=]\\s*['\"]?[a-zA-Z0-9_-]{20,}['\"]?"
+      - "refresh[_-]?token\\s*[:=]\\s*['\"]?[a-zA-Z0-9_-]{20,}['\"]?"
+
+      # Session tokens
+      - "session[_-]?id\\s*[:=]\\s*['\"]?[a-zA-Z0-9_-]{20,}['\"]?"
+      - "PHPSESSID"
+      - "JSESSIONID"
+      - "ASP.NET_SessionId"
+
+      # Password patterns
+      - "password\\s*[:=]\\s*['\"]?[^\\s'\"]{8,}['\"]?"
+      - "passwd\\s*[:=]\\s*['\"]?[^\\s'\"]{8,}['\"]?"
+      - "pwd\\s*[:=]\\s*['\"]?[^\\s'\"]{8,}['\"]?"
+
+      # Private keys
+      - "-----BEGIN.*PRIVATE KEY-----"
+      - "-----BEGIN RSA PRIVATE KEY-----"
+      - "-----BEGIN EC PRIVATE KEY-----"
+      - "-----BEGIN OPENSSH PRIVATE KEY-----"
+
+      # SSH keys
+      - "ssh-rsa AAAA"
+      - "ssh-ed25519 AAAA"
+
+      # Bearer tokens
+      - "Bearer\\s+[a-zA-Z0-9_-]{20,}"
+      - "Authorization:\\s*Bearer"
+
+  exfiltration:
+    enabled: true
+    severity: high
+    action: block
+    patterns:
+      - "curl.*Authorization"
+      - "wget.*--header.*Authorization"

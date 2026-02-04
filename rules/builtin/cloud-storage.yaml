@@ -1,0 +1,64 @@
+# Cloud Storage Security Rules
+# Protects cloud storage operations and credentials
+
+name: cloud-storage
+description: Security rules for cloud storage services
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # AWS S3
+      - "s3://.*access.*key"
+      - "AWS_ACCESS_KEY_ID"
+      - "AWS_SECRET_ACCESS_KEY"
+
+      # Google Cloud Storage
+      - "gs://.*credentials"
+      - "GOOGLE_CLOUD_KEYFILE"
+
+      # Azure Blob Storage
+      - "DefaultEndpointsProtocol=https;AccountName="
+      - "AZURE_STORAGE_CONNECTION_STRING"
+      - "AZURE_STORAGE_KEY"
+
+      # Cloudflare R2
+      - "CLOUDFLARE_R2_ACCESS_KEY"
+
+      # DigitalOcean Spaces
+      - "SPACES_ACCESS_KEY"
+      - "SPACES_SECRET_KEY"
+
+      # Backblaze B2
+      - "B2_APPLICATION_KEY"
+      - "B2_APPLICATION_KEY_ID"
+
+      # Wasabi
+      - "WASABI_ACCESS_KEY"
+
+  exfiltration:
+    enabled: true
+    severity: high
+    action: block
+    patterns:
+      # Upload to public buckets
+      - "aws s3 cp.*--acl public-read"
+      - "gsutil cp.*-a public-read"
+      - "aws s3 sync.*--acl public-read"
+
+      # Data transfer to external storage
+      - "rclone copy.*:"
+      - "rclone sync.*:"
+
+  destructive:
+    enabled: true
+    severity: critical
+    action: confirm
+    patterns:
+      - "aws s3 rm --recursive"
+      - "aws s3 rb --force"
+      - "gsutil rm -r"
+      - "az storage blob delete-batch"

@@ -1,0 +1,61 @@
+# Mobile Development Security Rules
+# Protects mobile app development credentials
+
+name: mobile-development
+description: Security rules for mobile app development
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # iOS/Apple
+      - "APPLE_ID"
+      - "APPLE_TEAM_ID"
+      - "APP_STORE_CONNECT_API_KEY"
+      - "IOS_DISTRIBUTION_CERTIFICATE"
+      - "FASTLANE_PASSWORD"
+      - "FASTLANE_SESSION"
+      - "MATCH_PASSWORD"
+
+      # Android/Google Play
+      - "GOOGLE_PLAY_JSON_KEY"
+      - "ANDROID_KEYSTORE_PASSWORD"
+      - "ANDROID_KEY_PASSWORD"
+      - "SUPPLY_JSON_KEY"
+
+      # Firebase
+      - "FIREBASE_TOKEN"
+      - "FIREBASE_API_KEY"
+      - "GOOGLE_APPLICATION_CREDENTIALS"
+      - "AAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}"
+
+      # Expo
+      - "EXPO_TOKEN"
+      - "EXPO_CLI_PASSWORD"
+
+      # App Center
+      - "APPCENTER_API_TOKEN"
+
+      # Crashlytics
+      - "CRASHLYTICS_API_KEY"
+
+      # TestFlight
+      - "TESTFLIGHT_"
+
+      # Code signing
+      - "SIGNING_KEY"
+      - "KEYSTORE_PASSWORD"
+      - "KEY_ALIAS"
+
+  destructive:
+    enabled: true
+    severity: high
+    action: confirm
+    patterns:
+      - "fastlane deliver"
+      - "fastlane supply"
+      - "expo publish"
+      - "appcenter distribute"

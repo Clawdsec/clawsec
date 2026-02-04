@@ -1,0 +1,74 @@
+# Package Manager Security Rules
+# Protects package manager credentials and operations
+
+name: package-managers
+description: Security rules for package managers (npm, pip, etc.)
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # NPM
+      - "npm_[a-zA-Z0-9]{36}"
+      - "NPM_TOKEN"
+      - "NPM_AUTH_TOKEN"
+      - "//registry.npmjs.org/:_authToken"
+
+      # Yarn
+      - "YARN_NPM_AUTH_TOKEN"
+
+      # PyPI
+      - "pypi-AgEIcHlwaS5vcmc[a-zA-Z0-9-_]{50,}"
+      - "PYPI_TOKEN"
+      - "TWINE_PASSWORD"
+
+      # RubyGems
+      - "RUBYGEMS_API_KEY"
+      - "GEM_HOST_API_KEY"
+
+      # Maven/Gradle
+      - "MAVEN_PASSWORD"
+      - "GRADLE_PUBLISH_KEY"
+      - "OSSRH_PASSWORD"
+
+      # NuGet
+      - "NUGET_API_KEY"
+      - "NUGET_AUTH_TOKEN"
+
+      # Cargo (Rust)
+      - "CARGO_REGISTRY_TOKEN"
+      - "CRATES_IO_TOKEN"
+
+      # Go
+      - "GOPRIVATE"
+      - "GOPROXY"
+
+      # Composer (PHP)
+      - "COMPOSER_AUTH"
+
+      # Hex (Elixir)
+      - "HEX_API_KEY"
+
+  destructive:
+    enabled: true
+    severity: high
+    action: confirm
+    patterns:
+      # NPM
+      - "npm unpublish"
+      - "npm deprecate"
+      - "npm cache clean --force"
+
+      # Yarn
+      - "yarn cache clean"
+
+      # Pip
+      - "pip uninstall -y"
+      - "pip cache purge"
+
+      # Gem
+      - "gem uninstall"
+      - "gem yank"

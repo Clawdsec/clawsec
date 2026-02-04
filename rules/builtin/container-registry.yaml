@@ -1,0 +1,55 @@
+# Container Registry Security Rules
+# Protects container registry credentials and operations
+
+name: container-registry
+description: Security rules for container registries
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # Docker Hub
+      - "DOCKER_PASSWORD"
+      - "DOCKER_AUTH_CONFIG"
+      - "DOCKERHUB_TOKEN"
+
+      # AWS ECR
+      - "aws ecr get-login-password"
+      - "AWS_ECR_LOGIN_TOKEN"
+
+      # Google Container Registry
+      - "GCR_KEY"
+      - "_json_key"
+
+      # Azure Container Registry
+      - "ACR_PASSWORD"
+      - "AZURE_CONTAINER_REGISTRY_PASSWORD"
+
+      # GitHub Container Registry
+      - "GHCR_TOKEN"
+
+      # Quay.io
+      - "QUAY_TOKEN"
+      - "QUAY_PASSWORD"
+
+      # Harbor
+      - "HARBOR_PASSWORD"
+
+      # JFrog Artifactory
+      - "ARTIFACTORY_API_KEY"
+      - "JFROG_PASSWORD"
+
+  destructive:
+    enabled: true
+    severity: high
+    action: confirm
+    patterns:
+      # Image deletion
+      - "docker rmi.*:latest"
+      - "docker push.*:latest"
+      - "aws ecr batch-delete-image"
+      - "gcloud container images delete"
+      - "az acr repository delete"

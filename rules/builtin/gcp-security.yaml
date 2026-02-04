@@ -1,0 +1,57 @@
+# GCP Security Rules
+# Protects against dangerous Google Cloud operations
+
+name: gcp-security
+description: Prevents destructive GCP operations
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: block
+    cloud:
+      enabled: true
+      patterns:
+        # Compute Engine
+        - "gcloud compute instances delete"
+        - "gcloud compute disks delete"
+        - "gcloud compute images delete"
+        - "gcloud compute snapshots delete"
+
+        # Cloud Storage
+        - "gsutil rm -r"
+        - "gsutil rb"
+        - "gcloud storage rm --recursive"
+        - "gcloud storage buckets delete"
+
+        # IAM
+        - "gcloud iam service-accounts delete"
+        - "gcloud iam roles delete"
+
+        # Cloud SQL
+        - "gcloud sql instances delete"
+        - "gcloud sql databases delete"
+        - "gcloud sql backups delete"
+
+        # Kubernetes Engine
+        - "gcloud container clusters delete"
+        - "gcloud container node-pools delete"
+
+        # Cloud Functions
+        - "gcloud functions delete"
+
+        # Cloud Run
+        - "gcloud run services delete"
+
+        # Firestore/Datastore
+        - "gcloud firestore databases delete"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "GOOGLE_APPLICATION_CREDENTIALS"
+      - "type.*service_account"
+      - "private_key_id"

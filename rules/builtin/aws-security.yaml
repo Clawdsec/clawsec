@@ -1,0 +1,57 @@
+# AWS Security Rules
+# Protects against dangerous AWS operations
+
+name: aws-security
+description: Prevents destructive AWS operations like instance termination and data deletion
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: block
+    cloud:
+      enabled: true
+      patterns:
+        # EC2 Operations
+        - "aws ec2 terminate-instances"
+        - "aws ec2 delete-"
+        - "aws ec2 modify-instance-attribute --disable-api-termination false"
+
+        # S3 Operations
+        - "aws s3 rb --force"
+        - "aws s3 rm --recursive"
+        - "aws s3api delete-bucket"
+        - "aws s3api delete-objects"
+
+        # IAM Operations
+        - "aws iam delete-user"
+        - "aws iam delete-role"
+        - "aws iam delete-policy"
+        - "aws iam delete-access-key"
+
+        # RDS Operations
+        - "aws rds delete-db-instance"
+        - "aws rds delete-db-cluster"
+        - "aws rds delete-db-snapshot"
+
+        # Lambda Operations
+        - "aws lambda delete-function"
+        - "aws lambda delete-layer-version"
+
+        # CloudFormation
+        - "aws cloudformation delete-stack"
+
+        # EKS/ECS
+        - "aws eks delete-cluster"
+        - "aws ecs delete-cluster"
+        - "aws ecs delete-service"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "AKIA[0-9A-Z]{16}"  # AWS Access Key ID
+      - "aws_secret_access_key"
+      - "AWS_SECRET_ACCESS_KEY"

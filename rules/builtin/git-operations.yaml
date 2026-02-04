@@ -1,0 +1,68 @@
+# Git Operations Security Rules
+# Protects against dangerous Git operations
+
+name: git-operations
+description: Prevents destructive Git operations that could cause data loss
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: confirm
+    shell:
+      enabled: true
+      patterns:
+        # Force push
+        - "git push --force"
+        - "git push -f"
+        - "git push --force-with-lease"
+
+        # Hard reset
+        - "git reset --hard"
+        - "git checkout -- ."
+        - "git checkout ."
+        - "git restore --staged --worktree"
+
+        # Clean operations
+        - "git clean -f"
+        - "git clean -fd"
+        - "git clean -fx"
+        - "git clean -fdx"
+
+        # Rebase operations
+        - "git rebase -i"
+        - "git rebase --interactive"
+
+        # Branch deletion
+        - "git branch -D"
+        - "git branch --delete --force"
+        - "git push origin --delete"
+        - "git push origin :"
+
+        # Stash operations
+        - "git stash drop"
+        - "git stash clear"
+
+        # Filter-branch (history rewriting)
+        - "git filter-branch"
+        - "git filter-repo"
+
+        # Submodule removal
+        - "git submodule deinit"
+
+        # Reflog expiration
+        - "git reflog expire"
+        - "git gc --prune"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "ghp_[a-zA-Z0-9]{36}"  # GitHub PAT
+      - "gho_[a-zA-Z0-9]{36}"  # GitHub OAuth
+      - "ghu_[a-zA-Z0-9]{36}"  # GitHub User
+      - "ghs_[a-zA-Z0-9]{36}"  # GitHub Server
+      - "ghr_[a-zA-Z0-9]{36}"  # GitHub Refresh
+      - "glpat-[a-zA-Z0-9-]{20}"  # GitLab PAT

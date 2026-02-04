@@ -1,0 +1,60 @@
+# Kubernetes Security Rules
+# Protects against dangerous Kubernetes operations
+
+name: kubernetes
+description: Prevents destructive Kubernetes operations
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: confirm
+    cloud:
+      enabled: true
+      patterns:
+        # Namespace Operations
+        - "kubectl delete namespace"
+        - "kubectl delete ns"
+        - "kubectl delete -n kube-system"
+        - "kubectl delete -n default --all"
+
+        # Cluster-wide deletions
+        - "kubectl delete --all"
+        - "kubectl delete -A"
+        - "kubectl delete --all-namespaces"
+
+        # Critical resources
+        - "kubectl delete deployment"
+        - "kubectl delete statefulset"
+        - "kubectl delete daemonset"
+        - "kubectl delete pvc"
+        - "kubectl delete pv"
+        - "kubectl delete secret"
+        - "kubectl delete configmap"
+
+        # Force deletions
+        - "kubectl delete --force"
+        - "kubectl delete --grace-period=0"
+
+        # Node operations
+        - "kubectl delete node"
+        - "kubectl drain"
+        - "kubectl cordon"
+
+        # RBAC
+        - "kubectl delete clusterrole"
+        - "kubectl delete clusterrolebinding"
+        - "kubectl delete serviceaccount"
+
+        # CRDs
+        - "kubectl delete crd"
+        - "kubectl delete customresourcedefinition"
+
+  website:
+    enabled: true
+    mode: allowlist
+    allowlist:
+      - "kubernetes.io"
+      - "k8s.io"
+      - "helm.sh"

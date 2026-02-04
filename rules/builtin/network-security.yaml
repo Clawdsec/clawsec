@@ -1,0 +1,57 @@
+# Network Security Rules
+# Protects against network-based attacks and data exfiltration
+
+name: network-security
+description: Prevents network-based security threats
+version: "1.0"
+
+rules:
+  exfiltration:
+    enabled: true
+    severity: high
+    action: block
+    patterns:
+      # Netcat reverse shells
+      - "nc -e"
+      - "nc -c"
+      - "ncat -e"
+      - "netcat -e"
+      - "/dev/tcp/"
+      - "/dev/udp/"
+
+      # Data exfiltration
+      - "curl.*POST.*-d"
+      - "curl.*--data"
+      - "wget.*--post-data"
+      - "curl.*@"  # File upload
+
+      # DNS tunneling
+      - "iodine"
+      - "dns2tcp"
+      - "dnscat"
+
+      # Port forwarding
+      - "ssh.*-R"
+      - "ssh.*-L"
+      - "ssh.*-D"
+      - "chisel"
+      - "ngrok"
+
+      # Encoded data transfer
+      - "base64.*|.*curl"
+      - "base64.*|.*wget"
+      - "base64.*|.*nc"
+
+  website:
+    enabled: true
+    mode: blocklist
+    severity: high
+    action: block
+    blocklist:
+      - "*.onion"
+      - "*.i2p"
+      - "pastebin.com"
+      - "hastebin.com"
+      - "transfer.sh"
+      - "file.io"
+      - "0x0.st"

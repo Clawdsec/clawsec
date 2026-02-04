@@ -1,0 +1,51 @@
+# Terraform Security Rules
+# Protects against dangerous Terraform operations
+
+name: terraform
+description: Prevents destructive Terraform operations
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: confirm
+    cloud:
+      enabled: true
+      patterns:
+        # Destroy operations
+        - "terraform destroy"
+        - "terraform destroy -auto-approve"
+        - "terraform apply -destroy"
+
+        # Forced replacements
+        - "terraform taint"
+        - "terraform apply -replace"
+
+        # State manipulation
+        - "terraform state rm"
+        - "terraform state mv"
+        - "terraform import"
+        - "terraform workspace delete"
+
+        # Force unlock
+        - "terraform force-unlock"
+
+        # OpenTofu equivalents
+        - "tofu destroy"
+        - "tofu destroy -auto-approve"
+        - "tofu state rm"
+
+        # Terragrunt
+        - "terragrunt destroy"
+        - "terragrunt destroy-all"
+        - "terragrunt run-all destroy"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "TF_VAR_"
+      - "backend.*access_key"
+      - "backend.*secret_key"

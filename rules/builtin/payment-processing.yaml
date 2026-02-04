@@ -1,0 +1,66 @@
+# Payment Processing Security Rules
+# Strict controls for payment and financial operations
+
+name: payment-processing
+description: Strict security controls for payment processing operations
+version: "1.0"
+
+rules:
+  purchase:
+    enabled: true
+    severity: critical
+    action: block
+    spendLimits:
+      perTransaction: 50
+      daily: 200
+    domains:
+      mode: blocklist
+      blocklist:
+        # Payment processors
+        - "*.stripe.com"
+        - "*.paypal.com"
+        - "*.square.com"
+        - "*.braintree.com"
+        - "*.adyen.com"
+        - "*.authorize.net"
+
+        # E-commerce
+        - "*.amazon.com"
+        - "*.ebay.com"
+        - "*.shopify.com"
+        - "*.etsy.com"
+        - "*.alibaba.com"
+        - "*.aliexpress.com"
+
+        # Cryptocurrency
+        - "*.coinbase.com"
+        - "*.binance.com"
+        - "*.kraken.com"
+
+        # Banking
+        - "*.chase.com"
+        - "*.bankofamerica.com"
+        - "*.wellsfargo.com"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # Stripe
+      - "sk_live_[a-zA-Z0-9]{24,}"
+      - "pk_live_[a-zA-Z0-9]{24,}"
+      - "rk_live_[a-zA-Z0-9]{24,}"
+
+      # PayPal
+      - "PAYPAL_CLIENT_SECRET"
+      - "PAYPAL_CLIENT_ID"
+
+      # Square
+      - "sq0csp-[a-zA-Z0-9-]{43}"
+      - "EAAAE[a-zA-Z0-9-]{60}"
+
+      # Credit card patterns
+      - "\\b4[0-9]{15}\\b"  # Visa
+      - "\\b5[1-5][0-9]{14}\\b"  # Mastercard
+      - "\\b3[47][0-9]{13}\\b"  # Amex

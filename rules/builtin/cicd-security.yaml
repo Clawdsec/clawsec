@@ -1,0 +1,64 @@
+# CI/CD Security Rules
+# Protects CI/CD pipelines and related secrets
+
+name: cicd-security
+description: Security rules for CI/CD pipelines and automation
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # GitHub Actions
+      - "GITHUB_TOKEN"
+      - "ACTIONS_RUNTIME_TOKEN"
+      - "GITHUB_SHA"
+
+      # GitLab CI
+      - "CI_JOB_TOKEN"
+      - "CI_REGISTRY_PASSWORD"
+      - "GITLAB_TOKEN"
+      - "glpat-[a-zA-Z0-9-]{20}"
+
+      # Jenkins
+      - "JENKINS_API_TOKEN"
+      - "JENKINS_USER"
+
+      # CircleCI
+      - "CIRCLE_TOKEN"
+      - "CIRCLECI_TOKEN"
+
+      # Travis CI
+      - "TRAVIS_TOKEN"
+
+      # AWS CodeBuild
+      - "CODEBUILD_RESOLVED_SOURCE_VERSION"
+
+      # Azure DevOps
+      - "SYSTEM_ACCESSTOKEN"
+      - "AZURE_DEVOPS_EXT_PAT"
+
+      # Bitbucket
+      - "BITBUCKET_APP_PASSWORD"
+      - "BITBUCKET_CLONE_PASSWORD"
+
+      # Vercel
+      - "VERCEL_TOKEN"
+
+      # Netlify
+      - "NETLIFY_AUTH_TOKEN"
+
+      # Fly.io
+      - "FLY_API_TOKEN"
+
+  destructive:
+    enabled: true
+    severity: high
+    action: confirm
+    patterns:
+      - "gh workflow disable"
+      - "gh repo delete"
+      - "vercel remove"
+      - "netlify sites:delete"

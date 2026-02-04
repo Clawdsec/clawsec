@@ -1,0 +1,71 @@
+# Cryptocurrency Wallet Security Rules
+# Protects cryptocurrency wallet credentials and operations
+
+name: crypto-wallets
+description: Security rules for cryptocurrency wallets and exchanges
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # Private keys (Ethereum/Bitcoin hex format)
+      - "[0-9a-fA-F]{64}"
+
+      # Mnemonic seed phrases (12/24 words)
+      - "(?i)(abandon|ability|able|about|above).*(?:word|seed|mnemonic)"
+
+      # Wallet seed/private key mentions
+      - "(?i)private[_\\s-]?key\\s*[:=]"
+      - "(?i)seed[_\\s-]?phrase\\s*[:=]"
+      - "(?i)mnemonic\\s*[:=]"
+      - "(?i)secret[_\\s-]?key\\s*[:=]"
+
+      # Exchange API keys
+      # Binance
+      - "BINANCE_API_KEY"
+      - "BINANCE_SECRET"
+
+      # Coinbase
+      - "COINBASE_API_KEY"
+      - "COINBASE_SECRET"
+      - "CB_ACCESS_KEY"
+
+      # Kraken
+      - "KRAKEN_API_KEY"
+      - "KRAKEN_SECRET"
+
+      # FTX (historical)
+      - "FTX_API_KEY"
+
+      # Kucoin
+      - "KUCOIN_API_KEY"
+
+      # Metamask
+      - "METAMASK_"
+
+      # WalletConnect
+      - "WALLETCONNECT_"
+
+      # Infura
+      - "INFURA_API_KEY"
+      - "INFURA_PROJECT_ID"
+
+      # Alchemy
+      - "ALCHEMY_API_KEY"
+
+  purchase:
+    enabled: true
+    severity: critical
+    action: block
+    domains:
+      mode: blocklist
+      blocklist:
+        - "*.binance.com"
+        - "*.coinbase.com"
+        - "*.kraken.com"
+        - "*.kucoin.com"
+        - "*.crypto.com"
+        - "*.gemini.com"

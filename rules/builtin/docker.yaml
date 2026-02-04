@@ -1,0 +1,57 @@
+# Docker Security Rules
+# Protects against dangerous Docker operations
+
+name: docker
+description: Prevents destructive Docker operations and insecure practices
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: high
+    action: confirm
+    shell:
+      enabled: true
+      patterns:
+        # Container removal
+        - "docker rm -f"
+        - "docker rm --force"
+        - "docker container rm -f"
+        - "docker container prune"
+
+        # Image removal
+        - "docker rmi -f"
+        - "docker image rm -f"
+        - "docker image prune -a"
+
+        # Volume removal
+        - "docker volume rm"
+        - "docker volume prune"
+
+        # Network removal
+        - "docker network rm"
+        - "docker network prune"
+
+        # System cleanup
+        - "docker system prune"
+        - "docker system prune -a"
+
+        # Dangerous run options
+        - "docker run --privileged"
+        - "docker run --cap-add=ALL"
+        - "docker run -v /:/host"
+        - "docker run --pid=host"
+        - "docker run --network=host"
+
+        # Compose operations
+        - "docker-compose down -v"
+        - "docker compose down -v"
+        - "docker-compose rm -f"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "DOCKER_AUTH_CONFIG"
+      - "DOCKER_PASSWORD"

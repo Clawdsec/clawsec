@@ -1,0 +1,47 @@
+# Minimal Security Rules
+# Lightweight security for trusted environments
+
+name: minimal
+description: Minimal security rules for trusted environments
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: confirm
+    shell:
+      enabled: true
+      patterns:
+        # Only the most dangerous commands
+        - "rm -rf /"
+        - "rm -rf /*"
+        - "dd if=/dev/zero of=/dev/sda"
+        - "mkfs"
+        - ":(){:|:&};:"  # Fork bomb
+    cloud:
+      enabled: false
+    code:
+      enabled: false
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: warn
+    patterns:
+      # Only catch actual production secrets
+      - "-----BEGIN.*PRIVATE KEY-----"
+      - "sk_live_"  # Production Stripe
+      - "AKIA"  # AWS keys
+
+  website:
+    enabled: false
+
+  purchase:
+    enabled: false
+
+  exfiltration:
+    enabled: false
+
+  sanitization:
+    enabled: false

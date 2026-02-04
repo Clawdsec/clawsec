@@ -1,0 +1,53 @@
+# Messaging Services Security Rules
+# Protects messaging service credentials
+
+name: messaging-services
+description: Security rules for messaging and communication services
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # Slack
+      - "xoxb-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]{24}"
+      - "xoxp-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]{24}"
+      - "xoxa-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]{24}"
+      - "xoxr-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]{24}"
+      - "SLACK_BOT_TOKEN"
+      - "SLACK_WEBHOOK_URL"
+
+      # Discord
+      - "DISCORD_TOKEN"
+      - "DISCORD_WEBHOOK"
+      - "[MN][A-Za-z\\d]{23,}\\.[\\w-]{6}\\.[\\w-]{27}"
+
+      # Telegram
+      - "TELEGRAM_BOT_TOKEN"
+      - "[0-9]+:AA[0-9A-Za-z_-]{33}"
+
+      # Twilio
+      - "TWILIO_AUTH_TOKEN"
+      - "TWILIO_ACCOUNT_SID"
+
+      # SendGrid
+      - "SENDGRID_API_KEY"
+      - "SG\\.[a-zA-Z0-9_-]{22}\\.[a-zA-Z0-9_-]{43}"
+
+      # Mailchimp
+      - "MAILCHIMP_API_KEY"
+      - "[a-f0-9]{32}-us[0-9]{1,2}"
+
+      # Postmark
+      - "POSTMARK_API_TOKEN"
+
+      # Mailgun
+      - "MAILGUN_API_KEY"
+
+      # PagerDuty
+      - "PAGERDUTY_API_KEY"
+
+      # Intercom
+      - "INTERCOM_ACCESS_TOKEN"

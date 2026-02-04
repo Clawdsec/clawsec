@@ -1,0 +1,58 @@
+# NoSQL Database Security Rules
+# Protects against destructive NoSQL operations
+
+name: database-nosql
+description: Prevents destructive NoSQL database operations
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: block
+    shell:
+      enabled: true
+      patterns:
+        # MongoDB
+        - "db.dropDatabase()"
+        - "db.collection.drop()"
+        - "db.dropAllUsers()"
+        - "db.collection.deleteMany({})"
+        - "db.collection.remove({})"
+        - "mongorestore --drop"
+
+        # Redis
+        - "FLUSHALL"
+        - "FLUSHDB"
+        - "redis-cli FLUSHALL"
+        - "redis-cli FLUSHDB"
+        - "DEL *"
+
+        # Elasticsearch
+        - "DELETE /_all"
+        - "DELETE /*"
+        - "curl.*DELETE.*_all"
+        - "curl.*DELETE.*\\*"
+
+        # Cassandra
+        - "DROP KEYSPACE"
+        - "DROP TABLE"
+        - "TRUNCATE"
+
+        # DynamoDB
+        - "aws dynamodb delete-table"
+        - "aws dynamodb batch-write-item"
+
+        # CouchDB
+        - "curl.*DELETE.*/.*/_all_docs"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "MONGODB_URI"
+      - "MONGO_PASSWORD"
+      - "REDIS_PASSWORD"
+      - "REDIS_URL"
+      - "ELASTICSEARCH_PASSWORD"

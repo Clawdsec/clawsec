@@ -1,0 +1,67 @@
+# Development Environment Security Rules
+# Balanced security for development environments
+
+name: development-env
+description: Balanced security rules for development environments
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: high
+    action: confirm  # Confirm instead of block for dev
+    shell:
+      enabled: true
+      patterns:
+        - "rm -rf /"
+        - "rm -rf /*"
+        - "dd if=/dev/zero"
+        - "mkfs"
+    cloud:
+      enabled: true
+      patterns:
+        - ".*delete.*--force"
+        - ".*destroy.*-auto-approve"
+    code:
+      enabled: true
+
+  secrets:
+    enabled: true
+    severity: high
+    action: warn  # Warn instead of block for dev
+    patterns:
+      # Only catch real production secrets
+      - "sk_live_"  # Stripe live keys
+      - "AKIA"  # AWS production keys
+      - "-----BEGIN.*PRIVATE KEY-----"
+
+  website:
+    enabled: true
+    mode: blocklist
+    severity: medium
+    action: warn
+    blocklist:
+      - "*.malware.com"
+      - "*.phishing.com"
+    allowlist:
+      - "localhost"
+      - "127.0.0.1"
+      - "*.local"
+
+  purchase:
+    enabled: true
+    severity: high
+    action: confirm  # Confirm instead of block
+    spendLimits:
+      perTransaction: 100
+      daily: 500
+
+  exfiltration:
+    enabled: true
+    severity: medium
+    action: warn
+
+  sanitization:
+    enabled: true
+    severity: medium
+    action: warn

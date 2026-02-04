@@ -1,0 +1,62 @@
+# Database SQL Security Rules
+# Protects against destructive SQL operations
+
+name: database-sql
+description: Prevents destructive SQL operations across databases
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: block
+    shell:
+      enabled: true
+      patterns:
+        # Table operations
+        - "DROP TABLE"
+        - "DROP DATABASE"
+        - "DROP SCHEMA"
+        - "DROP INDEX"
+        - "DROP VIEW"
+        - "DROP FUNCTION"
+        - "DROP PROCEDURE"
+        - "DROP TRIGGER"
+
+        # Data deletion
+        - "TRUNCATE TABLE"
+        - "DELETE FROM .* WHERE 1=1"
+        - "DELETE FROM .* WHERE true"
+        - "DELETE FROM [^W]*$"  # DELETE without WHERE
+
+        # Dangerous updates
+        - "UPDATE .* SET .* WHERE 1=1"
+        - "UPDATE .* SET .* WHERE true"
+
+        # Schema modifications
+        - "ALTER TABLE .* DROP"
+        - "ALTER DATABASE"
+
+        # User/Permission operations
+        - "DROP USER"
+        - "DROP ROLE"
+        - "REVOKE ALL"
+
+        # MySQL specific
+        - "FLUSH PRIVILEGES"
+        - "RESET MASTER"
+
+        # PostgreSQL specific
+        - "DROP OWNED BY"
+        - "REASSIGN OWNED"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "DATABASE_URL"
+      - "DB_PASSWORD"
+      - "MYSQL_ROOT_PASSWORD"
+      - "POSTGRES_PASSWORD"
+      - "PGPASSWORD"

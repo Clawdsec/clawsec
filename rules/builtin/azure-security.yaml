@@ -1,0 +1,58 @@
+# Azure Security Rules
+# Protects against dangerous Azure operations
+
+name: azure-security
+description: Prevents destructive Azure operations
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: block
+    cloud:
+      enabled: true
+      patterns:
+        # Virtual Machines
+        - "az vm delete"
+        - "az vm deallocate"
+        - "az vmss delete"
+
+        # Storage
+        - "az storage account delete"
+        - "az storage container delete"
+        - "az storage blob delete"
+        - "azcopy remove --recursive"
+
+        # Resource Groups
+        - "az group delete"
+
+        # Databases
+        - "az sql server delete"
+        - "az sql db delete"
+        - "az cosmosdb delete"
+        - "az postgres server delete"
+        - "az mysql server delete"
+
+        # AKS
+        - "az aks delete"
+        - "az aks nodepool delete"
+
+        # Functions
+        - "az functionapp delete"
+
+        # App Service
+        - "az webapp delete"
+
+        # Key Vault
+        - "az keyvault delete"
+        - "az keyvault secret delete"
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "AZURE_CLIENT_SECRET"
+      - "AZURE_TENANT_ID"
+      - "AZURE_SUBSCRIPTION_ID"

@@ -1,0 +1,64 @@
+# Healthcare/HIPAA Security Rules
+# Strict security rules for healthcare applications
+
+name: healthcare-hipaa
+description: HIPAA-compliant security rules for healthcare applications
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # Medical Record Numbers
+      - "\\bMRN[:\\s]*[0-9]{6,12}\\b"
+
+      # Patient identifiers
+      - "(?i)patient[_\\s-]?id\\s*[:=]"
+      - "(?i)ssn\\s*[:=]"
+
+      # Health insurance IDs
+      - "(?i)insurance[_\\s-]?id\\s*[:=]"
+      - "(?i)member[_\\s-]?id\\s*[:=]"
+      - "(?i)policy[_\\s-]?number\\s*[:=]"
+
+      # HL7/FHIR
+      - "(?i)hl7[_\\s-]?message"
+      - "(?i)fhir[_\\s-]?resource"
+
+      # PHI indicators
+      - "(?i)protected[_\\s-]?health"
+      - "(?i)medical[_\\s-]?record"
+      - "(?i)diagnosis[_\\s-]?code"
+      - "(?i)icd[_\\s-]?10"
+
+      # SSN
+      - "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+
+      # Date of birth
+      - "(?i)date[_\\s-]?of[_\\s-]?birth\\s*[:=]"
+      - "(?i)dob\\s*[:=]"
+
+  exfiltration:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      - "curl.*patient"
+      - "curl.*medical"
+      - "wget.*health"
+
+  website:
+    enabled: true
+    mode: allowlist
+    allowlist:
+      - "*.healthcare.gov"
+      - "*.hl7.org"
+      - "*.fhir.org"
+
+  sanitization:
+    enabled: true
+    severity: critical
+    action: block
+    redactMatches: true

@@ -1,0 +1,62 @@
+# Web Application Security Rules
+# Prevents common web security vulnerabilities
+
+name: web-security
+description: Security rules for web application development
+version: "1.0"
+
+rules:
+  sanitization:
+    enabled: true
+    severity: high
+    action: block
+    categories:
+      instructionOverride: true
+      systemLeak: true
+      jailbreak: true
+      encodedPayload: true
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # Session secrets
+      - "SESSION_SECRET"
+      - "COOKIE_SECRET"
+      - "JWT_SECRET"
+
+      # CORS
+      - "ACCESS_CONTROL_ALLOW_ORIGIN.*\\*"
+
+      # Encryption keys
+      - "ENCRYPTION_KEY"
+      - "CRYPTO_KEY"
+      - "SECRET_KEY_BASE"
+
+      # OAuth
+      - "OAUTH_CLIENT_SECRET"
+      - "GOOGLE_CLIENT_SECRET"
+      - "FACEBOOK_APP_SECRET"
+      - "TWITTER_CONSUMER_SECRET"
+
+      # Database
+      - "DATABASE_URL"
+      - "MONGODB_URI"
+      - "REDIS_URL"
+
+  website:
+    enabled: true
+    mode: blocklist
+    severity: high
+    blocklist:
+      # Known malicious domains (examples)
+      - "*.malware.com"
+      - "*.phishing.com"
+      - "evil*.com"
+
+      # Common honeypot domains
+      - "*.local"
+      - "*.test"
+      - "localhost"
+      - "127.0.0.1"

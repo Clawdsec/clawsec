@@ -1,0 +1,55 @@
+# Production Strict Security Rules
+# Maximum security for production environments
+
+name: production-strict
+description: Strict security rules for production environments
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: block
+    shell:
+      enabled: true
+    cloud:
+      enabled: true
+    code:
+      enabled: true
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+
+  website:
+    enabled: true
+    mode: allowlist
+    severity: critical
+    action: block
+    allowlist: []  # No websites allowed by default
+
+  purchase:
+    enabled: true
+    severity: critical
+    action: block
+    spendLimits:
+      perTransaction: 0
+      daily: 0
+
+  exfiltration:
+    enabled: true
+    severity: critical
+    action: block
+
+  sanitization:
+    enabled: true
+    severity: critical
+    action: block
+    minConfidence: 0.3  # Lower threshold for production
+    redactMatches: false  # Block entirely, don't just redact
+    categories:
+      instructionOverride: true
+      systemLeak: true
+      jailbreak: true
+      encodedPayload: true

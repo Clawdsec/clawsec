@@ -1,0 +1,61 @@
+# Financial/PCI-DSS Security Rules
+# PCI-DSS compliant security rules for financial applications
+
+name: financial-pci
+description: PCI-DSS compliant security rules for payment processing
+version: "1.0"
+
+rules:
+  purchase:
+    enabled: true
+    severity: critical
+    action: block
+    spendLimits:
+      perTransaction: 0  # Block all purchases
+      daily: 0
+
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # Primary Account Numbers (PAN) - Credit/Debit cards
+      - "\\b4[0-9]{12}(?:[0-9]{3})?\\b"  # Visa
+      - "\\b5[1-5][0-9]{14}\\b"  # Mastercard
+      - "\\b3[47][0-9]{13}\\b"  # Amex
+      - "\\b6(?:011|5[0-9]{2})[0-9]{12}\\b"  # Discover
+      - "\\b3(?:0[0-5]|[68][0-9])[0-9]{11}\\b"  # Diners
+
+      # CVV/CVC
+      - "(?i)cvv\\s*[:=]\\s*[0-9]{3,4}"
+      - "(?i)cvc\\s*[:=]\\s*[0-9]{3,4}"
+      - "(?i)security[_\\s-]?code\\s*[:=]\\s*[0-9]{3,4}"
+
+      # Expiration dates
+      - "(?i)exp(?:iry|iration)?[_\\s-]?date\\s*[:=]"
+
+      # Bank account numbers
+      - "(?i)account[_\\s-]?number\\s*[:=]\\s*[0-9]{8,17}"
+      - "(?i)routing[_\\s-]?number\\s*[:=]\\s*[0-9]{9}"
+
+      # IBAN
+      - "\\b[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}\\b"
+
+      # SWIFT/BIC
+      - "\\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?\\b"
+
+      # Payment processor secrets
+      - "sk_live_[a-zA-Z0-9]{24,}"  # Stripe
+      - "PAYPAL_CLIENT_SECRET"
+      - "BRAINTREE_PRIVATE_KEY"
+
+  exfiltration:
+    enabled: true
+    severity: critical
+    action: block
+
+  sanitization:
+    enabled: true
+    severity: critical
+    action: block
+    redactMatches: true

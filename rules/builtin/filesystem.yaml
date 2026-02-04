@@ -1,0 +1,71 @@
+# Filesystem Security Rules
+# Protects against dangerous filesystem operations
+
+name: filesystem
+description: Prevents destructive filesystem operations
+version: "1.0"
+
+rules:
+  destructive:
+    enabled: true
+    severity: critical
+    action: block
+    shell:
+      enabled: true
+      patterns:
+        # Recursive deletion
+        - "rm -rf /"
+        - "rm -rf /*"
+        - "rm -rf ~"
+        - "rm -rf $HOME"
+        - "rm -rf /home"
+        - "rm -rf /var"
+        - "rm -rf /etc"
+        - "rm -rf /usr"
+        - "rm -rf --no-preserve-root"
+
+        # Disk formatting
+        - "mkfs"
+        - "mkfs.ext4"
+        - "mkfs.xfs"
+        - "mkfs.btrfs"
+
+        # Disk writing
+        - "dd if=/dev/zero of=/dev/"
+        - "dd if=/dev/random of=/dev/"
+        - "dd if=.* of=/dev/sd"
+        - "dd if=.* of=/dev/nvme"
+
+        # Shredding
+        - "shred -u"
+        - "shred -z"
+
+        # Permission changes
+        - "chmod -R 777 /"
+        - "chmod -R 000 /"
+        - "chown -R.*:.*/"
+
+        # Symbolic link attacks
+        - "ln -sf /dev/null"
+
+        # System directories
+        - "rm -rf /boot"
+        - "rm -rf /bin"
+        - "rm -rf /sbin"
+        - "rm -rf /lib"
+
+    code:
+      enabled: true
+      patterns:
+        # Python
+        - "shutil.rmtree('/')"
+        - "os.remove("
+        - "pathlib.Path.unlink"
+
+        # Node.js
+        - "fs.rm(.*recursive.*true)"
+        - "fs.rmSync(.*recursive.*true)"
+        - "rimraf"
+
+        # Go
+        - "os.RemoveAll("

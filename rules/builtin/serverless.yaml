@@ -1,0 +1,74 @@
+# Serverless Security Rules
+# Protects serverless function deployments and credentials
+
+name: serverless
+description: Security rules for serverless platforms
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # AWS Lambda
+      - "AWS_LAMBDA_FUNCTION_NAME"
+      - "AWS_LAMBDA_LOG_GROUP_NAME"
+
+      # Google Cloud Functions
+      - "FUNCTION_TARGET"
+      - "GOOGLE_FUNCTION_SOURCE"
+
+      # Azure Functions
+      - "FUNCTIONS_WORKER_RUNTIME"
+      - "AzureWebJobsStorage"
+
+      # Vercel
+      - "VERCEL_TOKEN"
+      - "VERCEL_PROJECT_ID"
+
+      # Netlify Functions
+      - "NETLIFY_AUTH_TOKEN"
+
+      # Cloudflare Workers
+      - "CLOUDFLARE_API_TOKEN"
+      - "CF_API_KEY"
+
+      # Deno Deploy
+      - "DENO_DEPLOY_TOKEN"
+
+      # Supabase Edge Functions
+      - "SUPABASE_SERVICE_ROLE_KEY"
+
+      # Railway
+      - "RAILWAY_TOKEN"
+
+      # Render
+      - "RENDER_API_KEY"
+
+  destructive:
+    enabled: true
+    severity: high
+    action: confirm
+    patterns:
+      # AWS Lambda
+      - "aws lambda delete-function"
+      - "serverless remove"
+      - "sls remove"
+
+      # GCP Cloud Functions
+      - "gcloud functions delete"
+
+      # Azure Functions
+      - "az functionapp delete"
+      - "func azure functionapp delete"
+
+      # Vercel
+      - "vercel remove"
+      - "vercel rm"
+
+      # Netlify
+      - "netlify sites:delete"
+
+      # Cloudflare Workers
+      - "wrangler delete"

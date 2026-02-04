@@ -1,0 +1,64 @@
+# API Keys Security Rules
+# Detects and blocks exposure of various API keys
+
+name: api-keys
+description: Prevents exposure of API keys from popular services
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # OpenAI
+      - "sk-[a-zA-Z0-9]{48}"
+      - "sk-proj-[a-zA-Z0-9-_]{48,}"
+
+      # Anthropic
+      - "sk-ant-[a-zA-Z0-9-]{40,}"
+
+      # Google
+      - "AIza[0-9A-Za-z_-]{35}"
+      - "ya29\\.[0-9A-Za-z_-]+"
+
+      # GitHub
+      - "ghp_[a-zA-Z0-9]{36}"
+      - "gho_[a-zA-Z0-9]{36}"
+      - "ghu_[a-zA-Z0-9]{36}"
+      - "ghs_[a-zA-Z0-9]{36}"
+      - "ghr_[a-zA-Z0-9]{36}"
+
+      # Slack
+      - "xox[baprs]-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]{24,}"
+
+      # Twilio
+      - "SK[a-f0-9]{32}"
+      - "AC[a-f0-9]{32}"
+
+      # SendGrid
+      - "SG\\.[a-zA-Z0-9_-]{22}\\.[a-zA-Z0-9_-]{43}"
+
+      # Mailgun
+      - "key-[a-zA-Z0-9]{32}"
+
+      # NPM
+      - "npm_[a-zA-Z0-9]{36}"
+
+      # PyPI
+      - "pypi-AgEIcHlwaS5vcmc[a-zA-Z0-9-_]{50,}"
+
+      # Heroku
+      - "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
+
+      # Datadog
+      - "[a-f0-9]{32}"
+
+      # New Relic
+      - "NRAK-[A-Z0-9]{27}"
+
+      # Algolia
+      - "[a-f0-9]{32}"
+
+      # Firebase
+      - "AAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}"

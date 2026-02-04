@@ -1,0 +1,63 @@
+# Monitoring & Observability Security Rules
+# Protects monitoring service credentials
+
+name: monitoring
+description: Security rules for monitoring and observability services
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # Datadog
+      - "DD_API_KEY"
+      - "DD_APP_KEY"
+      - "DATADOG_API_KEY"
+
+      # New Relic
+      - "NEW_RELIC_LICENSE_KEY"
+      - "NEW_RELIC_API_KEY"
+      - "NRAK-[A-Z0-9]{27}"
+
+      # Sentry
+      - "SENTRY_DSN"
+      - "SENTRY_AUTH_TOKEN"
+
+      # Splunk
+      - "SPLUNK_TOKEN"
+      - "SPLUNK_HEC_TOKEN"
+
+      # Grafana
+      - "GRAFANA_API_KEY"
+      - "GF_SECURITY_ADMIN_PASSWORD"
+
+      # PagerDuty
+      - "PAGERDUTY_ROUTING_KEY"
+      - "PAGERDUTY_API_KEY"
+
+      # Honeycomb
+      - "HONEYCOMB_API_KEY"
+
+      # LogDNA/Mezmo
+      - "LOGDNA_API_KEY"
+
+      # Papertrail
+      - "PAPERTRAIL_API_TOKEN"
+
+      # Loggly
+      - "LOGGLY_TOKEN"
+
+      # Elasticsearch/Kibana
+      - "ELASTIC_PASSWORD"
+      - "ELASTICSEARCH_PASSWORD"
+
+      # Prometheus
+      - "PROMETHEUS_REMOTE_WRITE_URL"
+
+      # Jaeger
+      - "JAEGER_AGENT_HOST"
+
+      # Zipkin
+      - "ZIPKIN_BASE_URL"

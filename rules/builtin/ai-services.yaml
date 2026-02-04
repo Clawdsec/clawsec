@@ -1,0 +1,70 @@
+# AI Services Security Rules
+# Protects AI/ML service credentials
+
+name: ai-services
+description: Security rules for AI and ML services
+version: "1.0"
+
+rules:
+  secrets:
+    enabled: true
+    severity: critical
+    action: block
+    patterns:
+      # OpenAI
+      - "sk-[a-zA-Z0-9]{48}"
+      - "sk-proj-[a-zA-Z0-9-_]{48,}"
+      - "OPENAI_API_KEY"
+      - "OPENAI_ORG_ID"
+
+      # Anthropic
+      - "sk-ant-[a-zA-Z0-9-]{40,}"
+      - "ANTHROPIC_API_KEY"
+
+      # Google AI (Gemini, PaLM)
+      - "GOOGLE_AI_API_KEY"
+      - "PALM_API_KEY"
+      - "GEMINI_API_KEY"
+
+      # Cohere
+      - "COHERE_API_KEY"
+
+      # Hugging Face
+      - "hf_[a-zA-Z0-9]{34}"
+      - "HUGGINGFACE_TOKEN"
+      - "HF_TOKEN"
+
+      # Replicate
+      - "REPLICATE_API_TOKEN"
+      - "r8_[a-zA-Z0-9]{40}"
+
+      # Stability AI
+      - "STABILITY_API_KEY"
+
+      # Midjourney
+      - "MIDJOURNEY_"
+
+      # ElevenLabs
+      - "ELEVENLABS_API_KEY"
+
+      # AssemblyAI
+      - "ASSEMBLYAI_API_KEY"
+
+      # Deepgram
+      - "DEEPGRAM_API_KEY"
+
+      # AWS Bedrock
+      - "bedrock:InvokeModel"
+
+      # Azure OpenAI
+      - "AZURE_OPENAI_API_KEY"
+      - "AZURE_OPENAI_ENDPOINT"
+
+  website:
+    enabled: true
+    mode: allowlist
+    allowlist:
+      - "api.openai.com"
+      - "api.anthropic.com"
+      - "api.cohere.ai"
+      - "api-inference.huggingface.co"
