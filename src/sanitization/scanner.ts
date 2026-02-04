@@ -31,23 +31,6 @@ const REDACTED = '[REDACTED]';
 const MAX_DECODE_DEPTH = 3;
 
 /**
- * Check if a string is valid base64
- * @param str - String to check
- * @returns Whether the string is valid base64
- */
-function isValidBase64(str: string): boolean {
-  if (str.length < 20) return false;
-  if (str.length % 4 !== 0 && !str.endsWith('=')) return false;
-  try {
-    const decoded = atob(str);
-    // Check if decoded content is printable
-    return /^[\x20-\x7E\s]+$/.test(decoded);
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Decode base64 string safely
  * @param str - Base64 string to decode
  * @returns Decoded string or null if invalid

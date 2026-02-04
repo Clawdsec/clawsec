@@ -190,7 +190,7 @@ const CLOUD_SDK_PATTERNS = [
  * Match AWS S3 upload commands
  */
 export function matchAwsS3Upload(command: string): CloudUploadMatchResult {
-  for (const { pattern, operation, description } of AWS_S3_UPLOAD_PATTERNS) {
+  for (const { pattern, operation } of AWS_S3_UPLOAD_PATTERNS) {
     const match = command.match(pattern);
     if (match) {
       return {
@@ -211,7 +211,7 @@ export function matchAwsS3Upload(command: string): CloudUploadMatchResult {
  * Match GCP Storage upload commands
  */
 export function matchGcpUpload(command: string): CloudUploadMatchResult {
-  for (const { pattern, operation, description } of GCP_UPLOAD_PATTERNS) {
+  for (const { pattern, operation } of GCP_UPLOAD_PATTERNS) {
     const match = command.match(pattern);
     if (match) {
       return {
@@ -232,7 +232,7 @@ export function matchGcpUpload(command: string): CloudUploadMatchResult {
  * Match Azure Storage upload commands
  */
 export function matchAzureUpload(command: string): CloudUploadMatchResult {
-  for (const { pattern, operation, description } of AZURE_UPLOAD_PATTERNS) {
+  for (const { pattern, operation } of AZURE_UPLOAD_PATTERNS) {
     const match = command.match(pattern);
     if (match) {
       return {
@@ -253,7 +253,7 @@ export function matchAzureUpload(command: string): CloudUploadMatchResult {
  * Match Rclone upload commands
  */
 export function matchRcloneUpload(command: string): CloudUploadMatchResult {
-  for (const { pattern, operation, description } of RCLONE_UPLOAD_PATTERNS) {
+  for (const { pattern, operation } of RCLONE_UPLOAD_PATTERNS) {
     const match = command.match(pattern);
     if (match) {
       return {
@@ -274,7 +274,7 @@ export function matchRcloneUpload(command: string): CloudUploadMatchResult {
  * Match other cloud upload commands
  */
 export function matchOtherCloudUpload(command: string): CloudUploadMatchResult {
-  for (const { pattern, operation, description } of OTHER_CLOUD_PATTERNS) {
+  for (const { pattern, operation } of OTHER_CLOUD_PATTERNS) {
     const match = command.match(pattern);
     if (match) {
       return {
@@ -295,7 +295,7 @@ export function matchOtherCloudUpload(command: string): CloudUploadMatchResult {
  * Match cloud SDK upload patterns in code
  */
 export function matchCloudSdkUpload(code: string): CloudUploadMatchResult {
-  for (const { pattern, operation, description } of CLOUD_SDK_PATTERNS) {
+  for (const { pattern, operation } of CLOUD_SDK_PATTERNS) {
     const match = code.match(pattern);
     if (match) {
       let provider = 'unknown';
@@ -306,7 +306,7 @@ export function matchCloudSdkUpload(code: string): CloudUploadMatchResult {
       } else if (operation.includes('azure')) {
         provider = 'azure';
       }
-      
+
       return {
         matched: true,
         command: code,

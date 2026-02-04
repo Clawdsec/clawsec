@@ -15,7 +15,6 @@ import type {
 import type {
   Analyzer,
   ToolCallContext as EngineToolCallContext,
-  AnalysisResult,
   Detection,
 } from '../../engine/types.js';
 import type { ActionExecutor, ActionContext, ActionResult } from '../../actions/types.js';
@@ -269,6 +268,19 @@ export function createDefaultBeforeToolCallHandler(): BeforeToolCallHandler {
         enabled: true,
         severity: 'high',
         action: 'block',
+      },
+      sanitization: {
+        enabled: true,
+        severity: 'high',
+        action: 'block',
+        minConfidence: 0.5,
+        redactMatches: false,
+        categories: {
+          instructionOverride: true,
+          systemLeak: true,
+          jailbreak: true,
+          encodedPayload: true,
+        },
       },
     },
     approval: {

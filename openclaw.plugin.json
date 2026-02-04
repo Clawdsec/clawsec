@@ -3,6 +3,7 @@
   "id": "clawsec",
   "name": "Clawsec Security Plugin",
   "version": "1.0.0",
+  "kind": "security",
   "description": "Comprehensive security plugin for OpenClaw.ai that prevents AI agents from taking dangerous actions. Provides purchase protection, website control, destructive command prevention, and sensitive data filtering.",
   "author": "Clawsec Team",
   "license": "MIT",
@@ -22,8 +23,44 @@
     "openclaw": ">=1.0.0",
     "node": ">=18.0.0"
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "configPath": {
+        "type": "string",
+        "default": "./clawsec.yaml",
+        "description": "Path to the Clawsec YAML configuration file"
+      },
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Whether the security plugin is enabled"
+      },
+      "logLevel": {
+        "type": "string",
+        "enum": ["debug", "info", "warn", "error"],
+        "default": "info",
+        "description": "Logging verbosity level"
+      }
+    },
+    "additionalProperties": false
+  },
+  "uiHints": {
+    "configPath": {
+      "label": "Configuration File",
+      "helpText": "Path to clawsec.yaml configuration file"
+    },
+    "enabled": {
+      "label": "Enable Plugin",
+      "helpText": "Toggle the security plugin on or off"
+    },
+    "logLevel": {
+      "label": "Log Level",
+      "helpText": "Set logging verbosity (debug, info, warn, error)"
+    }
+  },
   "hooks": {
     "before-tool-call": {
       "id": "clawsec-before-tool-call",
@@ -45,28 +82,6 @@
     }
   },
   "configuration": {
-    "schema": {
-      "type": "object",
-      "properties": {
-        "configPath": {
-          "type": "string",
-          "default": "./clawsec.yaml",
-          "description": "Path to the Clawsec YAML configuration file"
-        },
-        "enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Whether the security plugin is enabled"
-        },
-        "logLevel": {
-          "type": "string",
-          "enum": ["debug", "info", "warn", "error"],
-          "default": "info",
-          "description": "Logging verbosity level"
-        }
-      },
-      "additionalProperties": false
-    },
     "externalConfigFile": {
       "format": "yaml",
       "filename": "clawsec.yaml",

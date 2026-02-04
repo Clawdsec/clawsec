@@ -7,7 +7,6 @@ import type {
   SecretsDetectionResult,
   SecretSubDetector,
   TokenMatch,
-  TokenType,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
 import { redactValue } from './api-key-detector.js';

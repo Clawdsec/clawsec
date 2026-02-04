@@ -401,6 +401,50 @@ export function getState(): Readonly<PluginState> {
 }
 
 // =============================================================================
+// CONFIG SCHEMA
+// =============================================================================
+
+/**
+ * JSON Schema for plugin configuration (matches openclaw.plugin.json)
+ */
+export const pluginConfigSchema = {
+  type: 'object',
+  properties: {
+    configPath: {
+      type: 'string',
+      default: './clawsec.yaml',
+      description: 'Path to the Clawsec YAML configuration file',
+    },
+    enabled: {
+      type: 'boolean',
+      default: true,
+      description: 'Whether the security plugin is enabled',
+    },
+    logLevel: {
+      type: 'string',
+      enum: ['debug', 'info', 'warn', 'error'],
+      default: 'info',
+      description: 'Logging verbosity level',
+    },
+  },
+  additionalProperties: false,
+} as const;
+
+// =============================================================================
+// REGISTER METHOD (OpenClaw Plugin API)
+// =============================================================================
+
+/**
+ * Register method for OpenClaw plugin system.
+ * This is the entry point called by OpenClaw when loading the plugin.
+ *
+ * @param api - The OpenClaw plugin API
+ */
+function register(api: OpenClawPluginAPI): void {
+  activate(api);
+}
+
+// =============================================================================
 // DEFAULT EXPORT
 // =============================================================================
 
@@ -409,6 +453,9 @@ export default {
   id: PLUGIN_ID,
   name: PLUGIN_NAME,
   version: VERSION,
+  configSchema: pluginConfigSchema,
+  register,
+  // Keep for backward compatibility
   activate,
   deactivate,
 };

@@ -30,8 +30,33 @@ Clawsec is a comprehensive security plugin that protects against:
 
 ### Installation
 
+#### Via npm (recommended)
+
 ```bash
 npm install clawsec
+```
+
+#### Via OpenClaw CLI
+
+```bash
+# Install from npm registry
+openclaw plugins install clawsec
+
+# Or install locally during development
+openclaw plugins install -l ./
+```
+
+### Verify Installation
+
+```bash
+# List installed plugins
+openclaw plugins list
+
+# Check plugin info
+openclaw plugins info clawsec
+
+# Run plugin diagnostics
+openclaw plugins doctor
 ```
 
 ### Basic Configuration
@@ -72,6 +97,27 @@ import clawsec from 'clawsec';
 
 // Register with OpenClaw
 openClaw.registerPlugin(clawsec);
+```
+
+### OpenClaw Configuration
+
+Configure Clawsec via OpenClaw's plugin settings:
+
+```yaml
+# openclaw.config.yaml
+plugins:
+  clawsec:
+    enabled: true
+    configPath: "./clawsec.yaml"
+    logLevel: "info"
+```
+
+Or use environment variables:
+
+```bash
+export OPENCLAW_PLUGIN_CLAWSEC_ENABLED=true
+export OPENCLAW_PLUGIN_CLAWSEC_CONFIG_PATH="./clawsec.yaml"
+export OPENCLAW_PLUGIN_CLAWSEC_LOG_LEVEL="info"
 ```
 
 ### Standalone Proxy Mode

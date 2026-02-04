@@ -2,8 +2,8 @@
   "name": "clawsec",
   "version": "1.0.0",
   "description": "Security plugin for OpenClaw.ai - prevents AI agents from taking dangerous actions",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -22,8 +22,11 @@
     "ai-safety",
     "plugin"
   ],
-  "author": "",
+  "author": "Clawsec Team",
   "license": "MIT",
+  "openclaw": {
+    "extensions": ["./dist/src/index.js"]
+  },
   "engines": {
     "node": ">=18.0.0"
   },
@@ -33,7 +36,8 @@
   "files": [
     "dist",
     "rules",
-    "bin"
+    "bin",
+    "openclaw.plugin.json"
   ],
   "dependencies": {
     "yaml": "^2.8.2",

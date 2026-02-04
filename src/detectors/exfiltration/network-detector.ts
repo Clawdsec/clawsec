@@ -217,7 +217,7 @@ const OTHER_NETWORK_PATTERNS = [
 /**
  * Extract host and port from match
  */
-function extractDestination(match: RegExpMatchArray, pattern: {
+function extractDestination(match: RegExpMatchArray, _pattern: {
   pattern: RegExp;
   tool: string;
 }): { host?: string; port?: string } {

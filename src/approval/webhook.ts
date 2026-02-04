@@ -3,7 +3,7 @@
  * Handles approval requests via external webhooks (Slack, Discord, custom APIs, etc.)
  */
 
-import type { Detection, ToolCallContext } from '../engine/types.js';
+import type { Detection } from '../engine/types.js';
 import type { ApprovalResult, ApprovalStore, PendingApprovalRecord } from './types.js';
 import type { WebhookApproval } from '../config/schema.js';
 import { getDefaultApprovalStore } from './store.js';
