@@ -112,9 +112,15 @@ export const PurchaseRuleSchema = z.object({
   /** Action to take when purchase is detected */
   action: ActionSchema.default('block'),
   /** Spending limits */
-  spendLimits: SpendLimitsSchema,
+  spendLimits: SpendLimitsSchema.optional().default(() => ({
+    perTransaction: 100,
+    daily: 500,
+  })),
   /** Domain configuration */
-  domains: PurchaseDomainsSchema,
+  domains: PurchaseDomainsSchema.optional().default(() => ({
+    mode: 'blocklist' as const,
+    blocklist: [],
+  })),
 }).default(() => ({
   enabled: true,
   severity: 'critical' as const,
@@ -196,11 +202,11 @@ export const DestructiveRuleSchema = z.object({
   /** Action to take when destructive command is detected */
   action: ActionSchema.default('confirm'),
   /** Shell command protection settings */
-  shell: ShellProtectionSchema,
+  shell: ShellProtectionSchema.optional().default(() => ({ enabled: true })),
   /** Cloud operation protection settings */
-  cloud: CloudProtectionSchema,
+  cloud: CloudProtectionSchema.optional().default(() => ({ enabled: true })),
   /** Code pattern protection settings */
-  code: CodeProtectionSchema,
+  code: CodeProtectionSchema.optional().default(() => ({ enabled: true })),
 }).default(() => ({
   enabled: true,
   severity: 'critical' as const,
@@ -262,15 +268,43 @@ export type ExfiltrationRule = z.infer<typeof ExfiltrationRuleSchema>;
  */
 export const RulesConfigSchema = z.object({
   /** Purchase protection rules */
-  purchase: PurchaseRuleSchema,
+  purchase: PurchaseRuleSchema.optional().default(() => ({
+    enabled: true,
+    severity: 'critical' as const,
+    action: 'block' as const,
+    spendLimits: { perTransaction: 100, daily: 500 },
+    domains: { mode: 'blocklist' as const, blocklist: [] },
+  })),
   /** Website control rules */
-  website: WebsiteRuleSchema,
+  website: WebsiteRuleSchema.optional().default(() => ({
+    enabled: true,
+    mode: 'blocklist' as const,
+    severity: 'high' as const,
+    action: 'block' as const,
+    blocklist: [],
+    allowlist: [],
+  })),
   /** Destructive command rules */
-  destructive: DestructiveRuleSchema,
+  destructive: DestructiveRuleSchema.optional().default(() => ({
+    enabled: true,
+    severity: 'critical' as const,
+    action: 'confirm' as const,
+    shell: { enabled: true },
+    cloud: { enabled: true },
+    code: { enabled: true },
+  })),
   /** Secrets/PII detection rules */
-  secrets: SecretsRuleSchema,
+  secrets: SecretsRuleSchema.optional().default(() => ({
+    enabled: true,
+    severity: 'critical' as const,
+    action: 'block' as const,
+  })),
   /** Data exfiltration detection rules */
-  exfiltration: ExfiltrationRuleSchema,
+  exfiltration: ExfiltrationRuleSchema.optional().default(() => ({
+    enabled: true,
+    severity: 'high' as const,
+    action: 'block' as const,
+  })),
 }).default(() => ({
   purchase: {
     enabled: true,
@@ -347,7 +381,7 @@ export const WebhookApprovalSchema = z.object({
   /** Whether webhook approval is enabled */
   enabled: z.boolean().default(false),
   /** Webhook URL for approval requests */
-  url: z.string().url().optional(),
+  url: z.url().optional(),
   /** Timeout in seconds for webhook requests */
   timeout: z.number().positive().default(30),
   /** Custom headers to send with webhook requests */
@@ -365,11 +399,22 @@ export type WebhookApproval = z.infer<typeof WebhookApprovalSchema>;
  */
 export const ApprovalConfigSchema = z.object({
   /** Native approval settings */
-  native: NativeApprovalSchema,
+  native: NativeApprovalSchema.optional().default(() => ({
+    enabled: true,
+    timeout: 300,
+  })),
   /** Agent confirm settings */
-  agentConfirm: AgentConfirmSchema,
+  agentConfirm: AgentConfirmSchema.optional().default(() => ({
+    enabled: true,
+    parameterName: '_clawsec_confirm',
+  })),
   /** Webhook approval settings */
-  webhook: WebhookApprovalSchema,
+  webhook: WebhookApprovalSchema.optional().default(() => ({
+    enabled: false,
+    url: undefined,
+    timeout: 30,
+    headers: {},
+  })),
 }).default(() => ({
   native: { enabled: true, timeout: 300 },
   agentConfirm: { enabled: true, parameterName: '_clawsec_confirm' },
@@ -388,13 +433,57 @@ export const ClawsecConfigSchema = z.object({
   /** Configuration version */
   version: z.string().default('1.0'),
   /** Global plugin settings */
-  global: GlobalConfigSchema,
+  global: GlobalConfigSchema.optional().default(() => ({
+    enabled: true,
+    logLevel: 'info' as const,
+  })),
   /** LLM integration settings */
-  llm: LLMConfigSchema,
+  llm: LLMConfigSchema.optional().default(() => ({
+    enabled: true,
+    model: null,
+  })),
   /** Security rules */
-  rules: RulesConfigSchema,
+  rules: RulesConfigSchema.optional().default(() => ({
+    purchase: {
+      enabled: true,
+      severity: 'critical' as const,
+      action: 'block' as const,
+      spendLimits: { perTransaction: 100, daily: 500 },
+      domains: { mode: 'blocklist' as const, blocklist: [] },
+    },
+    website: {
+      enabled: true,
+      mode: 'blocklist' as const,
+      severity: 'high' as const,
+      action: 'block' as const,
+      blocklist: [],
+      allowlist: [],
+    },
+    destructive: {
+      enabled: true,
+      severity: 'critical' as const,
+      action: 'confirm' as const,
+      shell: { enabled: true },
+      cloud: { enabled: true },
+      code: { enabled: true },
+    },
+    secrets: {
+      enabled: true,
+      severity: 'critical' as const,
+      action: 'block' as const,
+    },
+    exfiltration: {
+      enabled: true,
+      severity: 'high' as const,
+      action: 'block' as const,
+    },
+  })),
   /** Approval flow settings */
-  approval: ApprovalConfigSchema,
+  approval: ApprovalConfigSchema.optional().default(() => ({
+    native: { enabled: true, timeout: 300 },
+    agentConfirm: { enabled: true, parameterName: '_clawsec_confirm' },
+    webhook: { enabled: false, url: undefined, timeout: 30, headers: {} },
+  })),
 }).default(() => ({
   version: '1.0',
   global: { enabled: true, logLevel: 'info' as const },
