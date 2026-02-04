@@ -43,10 +43,13 @@ export function createLogger(
       return;
     }
 
+    // Add [clawsec] prefix to all messages
+    const prefixedMessage = `[clawsec] ${message}`;
+
     // Try API logging first
     if (api && typeof api.log === 'function') {
       try {
-        api.log(level, message, data);
+        api.log(level, prefixedMessage, data);
         return;
       } catch {
         // API logging failed, fall through to console
@@ -63,9 +66,9 @@ export function createLogger(
     };
     const consoleMethod = consoleMapping[level];
     if (data !== undefined) {
-      consoleMethod(`[clawsec] ${message}`, data);
+      consoleMethod(prefixedMessage, data);
     } else {
-      consoleMethod(`[clawsec] ${message}`);
+      consoleMethod(prefixedMessage);
     }
   }
 

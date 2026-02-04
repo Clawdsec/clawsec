@@ -176,7 +176,7 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        'Activating Clawsec Security Plugin v1.0.0',
+        '[clawsec] Activating Clawsec Security Plugin v1.0.0',
         undefined
       );
     });
@@ -188,7 +188,7 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        'All hooks registered successfully',
+        '[clawsec] All hooks registered successfully',
         undefined
       );
     });
@@ -257,7 +257,7 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'warn',
-        'Plugin already activated, skipping',
+        '[clawsec] Plugin already activated, skipping',
         undefined
       );
       // registerHook should only be called 3 times (not 6)
@@ -272,7 +272,7 @@ describe('Clawsec Plugin', () => {
       expect(api.registerHook).not.toHaveBeenCalled();
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        'Plugin is disabled via configuration',
+        '[clawsec] Plugin is disabled via configuration',
         undefined
       );
     });
@@ -338,12 +338,12 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        'Deactivating Clawsec Security Plugin',
+        '[clawsec] Deactivating Clawsec Security Plugin',
         undefined
       );
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        'All hooks unregistered',
+        '[clawsec] All hooks unregistered',
         undefined
       );
     });
@@ -483,7 +483,7 @@ describe('Clawsec Plugin', () => {
         
         expect(api.log).toHaveBeenCalledWith(
           'debug',
-          'before-tool-call: test-tool',
+          '[clawsec] before-tool-call: test-tool',
           expect.objectContaining({
             sessionId: context.sessionId,
           })
@@ -542,7 +542,7 @@ describe('Clawsec Plugin', () => {
         
         expect(api.log).toHaveBeenCalledWith(
           'debug',
-          'before-agent-start',
+          '[clawsec] before-agent-start',
           expect.objectContaining({
             sessionId: context.sessionId,
           })
@@ -582,7 +582,7 @@ describe('Clawsec Plugin', () => {
         
         expect(api.log).toHaveBeenCalledWith(
           'debug',
-          'tool-result-persist: test-tool',
+          '[clawsec] tool-result-persist: test-tool',
           expect.objectContaining({
             sessionId: context.sessionId,
           })

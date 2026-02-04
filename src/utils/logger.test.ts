@@ -34,7 +34,7 @@ describe('Logger Utility', () => {
 
       logger.info('test message', { data: 'value' });
 
-      expect(mockAPI.log).toHaveBeenCalledWith('info', 'test message', { data: 'value' });
+      expect(mockAPI.log).toHaveBeenCalledWith('info', '[clawsec] test message', { data: 'value' });
       expect(consoleInfoSpy).not.toHaveBeenCalled();
     });
 
