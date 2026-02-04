@@ -30,3 +30,17 @@ export {
   getDefaultNativeApprovalHandler,
   resetDefaultNativeApprovalHandler,
 } from './native.js';
+
+// Agent confirm handler
+export type {
+  AgentConfirmResult,
+  AgentConfirmHandler,
+  AgentConfirmHandlerConfig,
+} from './agent-confirm.js';
+export {
+  DEFAULT_CONFIRM_PARAMETER,
+  DefaultAgentConfirmHandler,
+  createAgentConfirmHandler,
+  getDefaultAgentConfirmHandler,
+  resetDefaultAgentConfirmHandler,
+} from './agent-confirm.js';

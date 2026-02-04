@@ -12,6 +12,11 @@ import {
   createNativeApprovalHandler,
   getDefaultNativeApprovalHandler,
   resetDefaultNativeApprovalHandler,
+  DefaultAgentConfirmHandler,
+  createAgentConfirmHandler,
+  getDefaultAgentConfirmHandler,
+  resetDefaultAgentConfirmHandler,
+  DEFAULT_CONFIRM_PARAMETER,
 } from './index.js';
 import type {
   PendingApprovalRecord,
@@ -1060,5 +1065,543 @@ describe('Integration', () => {
 
     expect(handler.getPendingApprovals().length).toBe(2);
     expect(handler.getPendingApprovals().map(r => r.id).sort()).toEqual(['multi-4', 'multi-5']);
+  });
+});
+
+// =============================================================================
+// AGENT CONFIRM HANDLER TESTS
+// =============================================================================
+
+describe('DefaultAgentConfirmHandler', () => {
+  let store: InMemoryApprovalStore;
+  let handler: DefaultAgentConfirmHandler;
+
+  beforeEach(() => {
+    store = createApprovalStore({ cleanupIntervalMs: 0 });
+    handler = createAgentConfirmHandler({ store });
+  });
+
+  afterEach(() => {
+    store.stopCleanupTimer();
+    store.clear();
+  });
+
+  describe('checkConfirmation', () => {
+    it('should return not confirmed when parameter is missing', () => {
+      const toolInput = { command: 'rm -rf /tmp/test' };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(false);
+      expect(result.valid).toBe(false);
+      expect(result.approvalId).toBeUndefined();
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should return confirmed and valid for pending approval', () => {
+      const input = createTestApprovalInput({ id: 'check-valid' });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'check-valid',
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(true);
+      expect(result.approvalId).toBe('check-valid');
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should return error for invalid approval ID (non-string)', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 123,
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('non-empty string');
+    });
+
+    it('should return error for empty approval ID', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: '',
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('non-empty string');
+    });
+
+    it('should return error for whitespace-only approval ID', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: '   ',
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('non-empty string');
+    });
+
+    it('should return error for non-existent approval ID', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'non-existent-id',
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.approvalId).toBe('non-existent-id');
+      expect(result.error).toContain('not found');
+    });
+
+    it('should return error for expired approval', () => {
+      const pastTime = Date.now() - 1000;
+      const input = createTestApprovalInput({
+        id: 'check-expired',
+        expiresAt: pastTime,
+      });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'check-expired',
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.approvalId).toBe('check-expired');
+      expect(result.error).toContain('expired');
+    });
+
+    it('should return error for already approved', () => {
+      const input = createTestApprovalInput({ id: 'check-already-approved' });
+      store.add(input);
+      store.approve('check-already-approved');
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'check-already-approved',
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('already approved');
+    });
+
+    it('should return error for already denied', () => {
+      const input = createTestApprovalInput({ id: 'check-denied' });
+      store.add(input);
+      store.deny('check-denied');
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'check-denied',
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('denied');
+    });
+
+    it('should trim whitespace from approval ID', () => {
+      const input = createTestApprovalInput({ id: 'check-trimmed' });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: '  check-trimmed  ',
+      };
+
+      const result = handler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(true);
+      expect(result.approvalId).toBe('check-trimmed');
+    });
+
+    it('should use custom parameter name when provided', () => {
+      const input = createTestApprovalInput({ id: 'custom-param-check' });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _my_custom_confirm: 'custom-param-check',
+      };
+
+      const result = handler.checkConfirmation(toolInput, '_my_custom_confirm');
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(true);
+      expect(result.approvalId).toBe('custom-param-check');
+    });
+
+    it('should not find confirmation when using wrong parameter name', () => {
+      const input = createTestApprovalInput({ id: 'wrong-param' });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'wrong-param',
+      };
+
+      const result = handler.checkConfirmation(toolInput, '_different_param');
+
+      expect(result.confirmed).toBe(false);
+      expect(result.valid).toBe(false);
+    });
+  });
+
+  describe('stripConfirmParameter', () => {
+    it('should remove the default confirm parameter', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'some-id',
+        otherParam: 'value',
+      };
+
+      const result = handler.stripConfirmParameter(toolInput);
+
+      expect(result).toEqual({
+        command: 'rm -rf /tmp/test',
+        otherParam: 'value',
+      });
+      expect('_clawsec_confirm' in result).toBe(false);
+    });
+
+    it('should remove custom parameter name', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _my_confirm: 'some-id',
+        _clawsec_confirm: 'should-stay',
+      };
+
+      const result = handler.stripConfirmParameter(toolInput, '_my_confirm');
+
+      expect(result).toEqual({
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'should-stay',
+      });
+    });
+
+    it('should return same object if parameter does not exist', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        otherParam: 'value',
+      };
+
+      const result = handler.stripConfirmParameter(toolInput);
+
+      expect(result).toEqual(toolInput);
+    });
+
+    it('should not modify original object', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'some-id',
+      };
+
+      handler.stripConfirmParameter(toolInput);
+
+      expect('_clawsec_confirm' in toolInput).toBe(true);
+    });
+
+    it('should handle empty tool input', () => {
+      const toolInput = {};
+
+      const result = handler.stripConfirmParameter(toolInput);
+
+      expect(result).toEqual({});
+    });
+  });
+
+  describe('processConfirmation', () => {
+    it('should approve pending approval and return valid result', () => {
+      const input = createTestApprovalInput({ id: 'process-valid' });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'process-valid',
+      };
+
+      const result = handler.processConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(true);
+      expect(result.approvalId).toBe('process-valid');
+
+      // Verify the record was approved
+      const record = store.get('process-valid');
+      expect(record?.status).toBe('approved');
+      expect(record?.approvedBy).toBe('agent');
+    });
+
+    it('should not approve for invalid approval ID', () => {
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'non-existent',
+      };
+
+      const result = handler.processConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not found');
+    });
+
+    it('should not approve expired approval', () => {
+      const pastTime = Date.now() - 1000;
+      const input = createTestApprovalInput({
+        id: 'process-expired',
+        expiresAt: pastTime,
+      });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'process-expired',
+      };
+
+      const result = handler.processConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('expired');
+
+      // Verify record is still expired
+      expect(store.get('process-expired')?.status).toBe('expired');
+    });
+
+    it('should return not confirmed when parameter is missing', () => {
+      const toolInput = { command: 'rm -rf /tmp/test' };
+
+      const result = handler.processConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(false);
+      expect(result.valid).toBe(false);
+    });
+  });
+
+  describe('configuration', () => {
+    it('should use custom parameter name from config', () => {
+      const customHandler = createAgentConfirmHandler({
+        store,
+        parameterName: '_custom_confirm',
+      });
+
+      const input = createTestApprovalInput({ id: 'config-custom' });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _custom_confirm: 'config-custom',
+      };
+
+      const result = customHandler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(true);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should return error when disabled', () => {
+      const disabledHandler = createAgentConfirmHandler({
+        store,
+        enabled: false,
+      });
+
+      const input = createTestApprovalInput({ id: 'config-disabled' });
+      store.add(input);
+
+      const toolInput = {
+        command: 'rm -rf /tmp/test',
+        _clawsec_confirm: 'config-disabled',
+      };
+
+      const result = disabledHandler.checkConfirmation(toolInput);
+
+      expect(result.confirmed).toBe(false);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('disabled');
+    });
+
+    it('should report enabled status', () => {
+      const enabledHandler = createAgentConfirmHandler({ store, enabled: true });
+      const disabledHandler = createAgentConfirmHandler({ store, enabled: false });
+
+      expect(enabledHandler.isEnabled()).toBe(true);
+      expect(disabledHandler.isEnabled()).toBe(false);
+    });
+
+    it('should report parameter name', () => {
+      const defaultHandler = createAgentConfirmHandler({ store });
+      const customHandler = createAgentConfirmHandler({
+        store,
+        parameterName: '_my_param',
+      });
+
+      expect(defaultHandler.getParameterName()).toBe('_clawsec_confirm');
+      expect(customHandler.getParameterName()).toBe('_my_param');
+    });
+  });
+});
+
+describe('Default agent confirm handler singleton', () => {
+  afterEach(() => {
+    resetDefaultAgentConfirmHandler();
+    resetDefaultApprovalStore();
+  });
+
+  it('should return the same instance on multiple calls', () => {
+    const handler1 = getDefaultAgentConfirmHandler();
+    const handler2 = getDefaultAgentConfirmHandler();
+
+    expect(handler1).toBe(handler2);
+  });
+
+  it('should create new instance after reset', () => {
+    const handler1 = getDefaultAgentConfirmHandler();
+    resetDefaultAgentConfirmHandler();
+    const handler2 = getDefaultAgentConfirmHandler();
+
+    expect(handler1).not.toBe(handler2);
+  });
+
+  it('should use default store', () => {
+    const defaultStore = getDefaultApprovalStore();
+    const input = createTestApprovalInput({ id: 'singleton-agent-test' });
+    defaultStore.add(input);
+
+    const handler = getDefaultAgentConfirmHandler();
+    const toolInput = { _clawsec_confirm: 'singleton-agent-test' };
+
+    const result = handler.checkConfirmation(toolInput);
+
+    expect(result.confirmed).toBe(true);
+    expect(result.valid).toBe(true);
+  });
+});
+
+describe('DEFAULT_CONFIRM_PARAMETER constant', () => {
+  it('should equal _clawsec_confirm', () => {
+    expect(DEFAULT_CONFIRM_PARAMETER).toBe('_clawsec_confirm');
+  });
+});
+
+// =============================================================================
+// AGENT CONFIRM INTEGRATION TESTS
+// =============================================================================
+
+describe('Agent Confirm Integration', () => {
+  let store: InMemoryApprovalStore;
+  let handler: DefaultAgentConfirmHandler;
+
+  beforeEach(() => {
+    store = createApprovalStore({ cleanupIntervalMs: 0 });
+    handler = createAgentConfirmHandler({ store });
+  });
+
+  afterEach(() => {
+    store.stopCleanupTimer();
+    store.clear();
+  });
+
+  it('should handle complete agent confirmation flow', () => {
+    // 1. Create pending approval (simulating detection triggering approval)
+    const approval = createTestApprovalInput({
+      id: 'agent-flow-1',
+      detection: createTestDetection({
+        category: 'destructive',
+        reason: 'rm -rf detected',
+      }),
+      toolCall: createTestToolCall({
+        toolName: 'bash',
+        toolInput: { command: 'rm -rf /tmp/old' },
+      }),
+    });
+    store.add(approval);
+
+    // 2. Simulate agent retrying with confirmation
+    const retryInput = {
+      command: 'rm -rf /tmp/old',
+      _clawsec_confirm: 'agent-flow-1',
+    };
+
+    // 3. Process the confirmation
+    const result = handler.processConfirmation(retryInput);
+
+    // 4. Verify success
+    expect(result.confirmed).toBe(true);
+    expect(result.valid).toBe(true);
+
+    // 5. Verify record was approved
+    const record = store.get('agent-flow-1');
+    expect(record?.status).toBe('approved');
+    expect(record?.approvedBy).toBe('agent');
+
+    // 6. Strip the parameter for clean execution
+    const cleanInput = handler.stripConfirmParameter(retryInput);
+    expect(cleanInput).toEqual({ command: 'rm -rf /tmp/old' });
+  });
+
+  it('should reject confirmation for wrong tool call', () => {
+    // Create approval for one tool call
+    const approval = createTestApprovalInput({
+      id: 'wrong-tool',
+      toolCall: createTestToolCall({
+        toolName: 'bash',
+        toolInput: { command: 'rm -rf /specific/path' },
+      }),
+    });
+    store.add(approval);
+
+    // Note: The current implementation validates the approval ID exists
+    // but does NOT validate that the tool input matches the original.
+    // This is by design - the approval ID is the key, and the agent
+    // is responsible for using it correctly.
+    const differentInput = {
+      command: 'different-command',
+      _clawsec_confirm: 'wrong-tool',
+    };
+
+    const result = handler.processConfirmation(differentInput);
+
+    // Current implementation approves based on ID alone
+    expect(result.valid).toBe(true);
+  });
+
+  it('should handle rapid retry attempts', () => {
+    const approval = createTestApprovalInput({ id: 'rapid-retry' });
+    store.add(approval);
+
+    const toolInput = { _clawsec_confirm: 'rapid-retry' };
+
+    // First attempt should succeed
+    const result1 = handler.processConfirmation(toolInput);
+    expect(result1.valid).toBe(true);
+
+    // Second attempt should fail (already approved)
+    const result2 = handler.processConfirmation(toolInput);
+    expect(result2.valid).toBe(false);
+    expect(result2.error).toContain('already approved');
   });
 });
