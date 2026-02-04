@@ -12,7 +12,12 @@ import type {
 import { DomainDetector, createDomainDetector } from './domain-detector.js';
 import { UrlDetector, createUrlDetector } from './url-detector.js';
 import { FormDetector, createFormDetector } from './form-detector.js';
-import type { PurchaseRule, Severity } from '../../config/index.js';
+import {
+  SpendTracker,
+  getGlobalSpendTracker,
+  extractAmountFromInput,
+} from './spend-tracker.js';
+import type { PurchaseRule, Severity, SpendLimits } from '../../config/index.js';
 
 // Re-export types
 export * from './types.js';
@@ -30,6 +35,19 @@ export {
 } from './domain-detector.js';
 export { extractPath, matchUrlPath } from './url-detector.js';
 export { matchFormFields, containsPaymentValues } from './form-detector.js';
+
+// Re-export spend tracker
+export {
+  SpendTracker,
+  createSpendTracker,
+  getGlobalSpendTracker,
+  resetGlobalSpendTracker,
+  extractAmountFromInput,
+  extractAmount,
+  type SpendRecord,
+  type SpendLimitResult,
+  type ISpendTracker,
+} from './spend-tracker.js';
 
 /**
  * No detection result (used when disabled or no match)
@@ -108,8 +126,9 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
   private domainDetector: DomainDetector;
   private urlDetector: UrlDetector;
   private formDetector: FormDetector;
+  private spendTracker: SpendTracker;
 
-  constructor(config: PurchaseDetectorConfig) {
+  constructor(config: PurchaseDetectorConfig, spendTracker?: SpendTracker) {
     this.config = config;
     
     const customBlocklist = config.domains?.mode === 'blocklist' 
@@ -119,6 +138,7 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
     this.domainDetector = createDomainDetector(config.severity, customBlocklist);
     this.urlDetector = createUrlDetector(config.severity);
     this.formDetector = createFormDetector(config.severity);
+    this.spendTracker = spendTracker || getGlobalSpendTracker();
   }
 
   async detect(context: DetectionContext): Promise<DetectionResult> {
@@ -133,7 +153,76 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
     const formResult = this.formDetector.detect(context);
 
     // Combine results
-    return combineResults([domainResult, urlResult, formResult], this.config.severity);
+    let result = combineResults([domainResult, urlResult, formResult], this.config.severity);
+
+    // If purchase detected and spend limits configured, check limits
+    if (result.detected && this.config.spendLimits) {
+      result = this.checkSpendLimits(result, context);
+    }
+
+    return result;
+  }
+
+  /**
+   * Check spend limits and enhance detection result
+   */
+  private checkSpendLimits(result: DetectionResult, context: DetectionContext): DetectionResult {
+    const limits = this.config.spendLimits;
+    if (!limits) {
+      return result;
+    }
+
+    // Try to extract amount from the tool input
+    const amount = extractAmountFromInput(context.toolInput);
+    
+    // If no amount found, use per-transaction limit as the assumed amount
+    // This is a security-first approach - assume worst case if unknown
+    const effectiveAmount = amount ?? limits.perTransaction;
+
+    // Check limits
+    const limitResult = this.spendTracker.checkLimits(effectiveAmount, limits);
+
+    // Enhance metadata with amount info
+    const enhancedMetadata = {
+      ...result.metadata,
+      amount: amount ?? undefined,
+      currentDailyTotal: limitResult.currentDailyTotal,
+    };
+
+    // If limits exceeded, add to reason
+    if (!limitResult.allowed) {
+      enhancedMetadata.exceededLimit = limitResult.exceededLimit;
+      
+      const limitReason = limitResult.message || 
+        `Spend limit exceeded: ${limitResult.exceededLimit}`;
+      
+      return {
+        ...result,
+        reason: `${result.reason}. ${limitReason}`,
+        metadata: enhancedMetadata,
+      };
+    }
+
+    // Limits not exceeded but amount detected - add to metadata
+    return {
+      ...result,
+      metadata: enhancedMetadata,
+    };
+  }
+
+  /**
+   * Record a transaction after it has been approved
+   * Call this when a purchase is allowed to proceed
+   */
+  recordTransaction(amount: number, metadata?: { transactionId?: string; domain?: string }): void {
+    this.spendTracker.record(amount, metadata);
+  }
+
+  /**
+   * Get the spend tracker instance
+   */
+  getSpendTracker(): SpendTracker {
+    return this.spendTracker;
   }
 
   /**
@@ -149,12 +238,19 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
   isEnabled(): boolean {
     return this.config.enabled;
   }
+
+  /**
+   * Get the configured spend limits
+   */
+  getSpendLimits(): SpendLimits | undefined {
+    return this.config.spendLimits;
+  }
 }
 
 /**
  * Create a purchase detector from PurchaseRule configuration
  */
-export function createPurchaseDetector(rule: PurchaseRule): PurchaseDetectorImpl {
+export function createPurchaseDetector(rule: PurchaseRule, spendTracker?: SpendTracker): PurchaseDetectorImpl {
   const config: PurchaseDetectorConfig = {
     enabled: rule.enabled,
     severity: rule.severity,
@@ -163,9 +259,13 @@ export function createPurchaseDetector(rule: PurchaseRule): PurchaseDetectorImpl
       mode: rule.domains.mode,
       blocklist: rule.domains.blocklist,
     } : undefined,
+    spendLimits: rule.spendLimits ? {
+      perTransaction: rule.spendLimits.perTransaction,
+      daily: rule.spendLimits.daily,
+    } : undefined,
   };
   
-  return new PurchaseDetectorImpl(config);
+  return new PurchaseDetectorImpl(config, spendTracker);
 }
 
 /**

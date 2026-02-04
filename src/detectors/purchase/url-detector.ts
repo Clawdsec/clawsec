@@ -113,12 +113,12 @@ const URL_KEYWORDS = [
  */
 function pathPatternToRegex(pattern: string): RegExp {
   // Normalize pattern - remove trailing slash for matching
-  let normalizedPattern = pattern.endsWith('/') && pattern.length > 1
+  const normalizedPattern = pattern.endsWith('/') && pattern.length > 1
     ? pattern.slice(0, -1)
     : pattern;
   
   // Escape special regex characters except *
-  let regex = normalizedPattern
+  const regex = normalizedPattern
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')
     .replace(/\*/g, '.*');
   

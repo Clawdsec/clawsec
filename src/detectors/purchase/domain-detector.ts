@@ -137,7 +137,7 @@ export function extractDomain(url: string): string | null {
  */
 export function globToRegex(pattern: string): RegExp {
   // Escape special regex characters except * and ?
-  let regex = pattern
+  const regex = pattern
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')
     .replace(/\*/g, '.*')
     .replace(/\?/g, '.');

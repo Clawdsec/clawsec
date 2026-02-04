@@ -41,6 +41,12 @@ export interface DetectionResult {
     formFields?: string[];
     /** Pattern that matched */
     matchedPattern?: string;
+    /** Detected amount from the transaction */
+    amount?: number;
+    /** Spend limit that was exceeded */
+    exceededLimit?: 'perTransaction' | 'daily';
+    /** Current daily total at time of detection */
+    currentDailyTotal?: number;
   };
 }
 
@@ -60,6 +66,13 @@ export interface PurchaseDetectorConfig {
     mode: 'blocklist' | 'allowlist';
     /** Domains to block */
     blocklist: string[];
+  };
+  /** Spending limits configuration */
+  spendLimits?: {
+    /** Maximum amount per transaction */
+    perTransaction: number;
+    /** Maximum daily spending amount */
+    daily: number;
   };
 }
 

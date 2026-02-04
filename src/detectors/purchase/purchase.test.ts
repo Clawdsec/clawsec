@@ -31,6 +31,11 @@ import {
   matchFormFields,
   containsPaymentValues,
   
+  // Spend tracking
+  SpendTracker,
+  createSpendTracker,
+  resetGlobalSpendTracker,
+  
   // Types
   type DetectionContext,
   type PurchaseDetectorConfig,
@@ -790,5 +795,373 @@ describe('Integration', () => {
     
     const result = await detector.detect(context);
     expect(result.detected).toBe(true);
+  });
+});
+
+// =============================================================================
+// SPEND LIMIT INTEGRATION TESTS
+// =============================================================================
+
+describe('Spend Limit Integration', () => {
+  let spendTracker: SpendTracker;
+  
+  beforeEach(() => {
+    spendTracker = createSpendTracker();
+    resetGlobalSpendTracker();
+  });
+
+  describe('detection with spend limits', () => {
+    it('should include amount in metadata when detected', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 500,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 50,
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.detected).toBe(true);
+      expect(result.metadata?.amount).toBe(50);
+      expect(result.metadata?.currentDailyTotal).toBe(0);
+    });
+
+    it('should detect per-transaction limit exceeded', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 500,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 150,
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.detected).toBe(true);
+      expect(result.metadata?.exceededLimit).toBe('perTransaction');
+      expect(result.reason).toContain('per-transaction limit');
+    });
+
+    it('should detect daily limit exceeded', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 200,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      // Record previous transactions
+      spendTracker.record(100);
+      spendTracker.record(50);
+      // Total: 150, remaining: 50
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 75,  // Would exceed daily limit
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.detected).toBe(true);
+      expect(result.metadata?.exceededLimit).toBe('daily');
+      expect(result.metadata?.currentDailyTotal).toBe(150);
+      expect(result.reason).toContain('daily limit');
+    });
+
+    it('should not add limit info when within limits', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 500,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 50,
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.detected).toBe(true);
+      expect(result.metadata?.exceededLimit).toBeUndefined();
+      expect(result.metadata?.amount).toBe(50);
+    });
+  });
+
+  describe('amount extraction from context', () => {
+    it('should extract amount from price field', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 500,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          price: '99.99',
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.metadata?.amount).toBe(99.99);
+    });
+
+    it('should extract amount from URL query params', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 500,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout?total=75.00',
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.metadata?.amount).toBe(75);
+    });
+
+    it('should use perTransaction limit when amount unknown', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 150,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      // Record enough to nearly max daily limit
+      spendTracker.record(100);
+      // Remaining: 50, but unknown amount will use perTransaction (100)
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          // No amount specified
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.detected).toBe(true);
+      // Should flag as exceeding daily (100 + 100 > 150)
+      expect(result.metadata?.exceededLimit).toBe('daily');
+      expect(result.metadata?.amount).toBeUndefined();
+    });
+  });
+
+  describe('transaction recording', () => {
+    it('should record transaction via detector', () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 500,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      detector.recordTransaction(75, { domain: 'amazon.com' });
+      
+      expect(spendTracker.getDailyTotal()).toBe(75);
+      const transactions = spendTracker.getTransactions();
+      expect(transactions[0].domain).toBe('amazon.com');
+    });
+
+    it('should accumulate transactions affecting future detections', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: {
+          perTransaction: 100,
+          daily: 200,
+        },
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      // First detection - should be fine
+      const context1: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 75,
+        },
+      };
+      const result1 = await detector.detect(context1);
+      expect(result1.metadata?.exceededLimit).toBeUndefined();
+      
+      // Record the transaction
+      detector.recordTransaction(75);
+      
+      // Second detection - should still be fine
+      const context2: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 75,
+        },
+      };
+      const result2 = await detector.detect(context2);
+      expect(result2.metadata?.exceededLimit).toBeUndefined();
+      expect(result2.metadata?.currentDailyTotal).toBe(75);
+      
+      // Record second transaction
+      detector.recordTransaction(75);
+      
+      // Third detection - should exceed daily limit
+      const context3: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 75,
+        },
+      };
+      const result3 = await detector.detect(context3);
+      expect(result3.metadata?.exceededLimit).toBe('daily');
+      expect(result3.metadata?.currentDailyTotal).toBe(150);
+    });
+  });
+
+  describe('createPurchaseDetector with spend limits', () => {
+    it('should create detector with spend limits from rule', async () => {
+      const rule = {
+        enabled: true,
+        severity: 'critical' as const,
+        action: 'block' as const,
+        spendLimits: { perTransaction: 50, daily: 100 },
+        domains: {
+          mode: 'blocklist' as const,
+          blocklist: [],
+        },
+      };
+      
+      const detector = createPurchaseDetector(rule, spendTracker);
+      
+      expect(detector.getSpendLimits()).toEqual({
+        perTransaction: 50,
+        daily: 100,
+      });
+      
+      // Test that limits are enforced
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 75,  // Exceeds perTransaction of 50
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.metadata?.exceededLimit).toBe('perTransaction');
+    });
+
+    it('should work without spend limits', async () => {
+      const rule = {
+        enabled: true,
+        severity: 'critical' as const,
+        action: 'block' as const,
+        domains: {
+          mode: 'blocklist' as const,
+          blocklist: [],
+        },
+      };
+      
+      const detector = createPurchaseDetector(rule, spendTracker);
+      
+      expect(detector.getSpendLimits()).toBeUndefined();
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 10000,  // Large amount but no limits configured
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.detected).toBe(true);
+      expect(result.metadata?.exceededLimit).toBeUndefined();
+    });
+  });
+
+  describe('without spend limits configured', () => {
+    it('should not check spend limits when not configured', async () => {
+      const config: PurchaseDetectorConfig = {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        // No spendLimits
+      };
+      const detector = new PurchaseDetectorImpl(config, spendTracker);
+      
+      const context: DetectionContext = {
+        toolName: 'browser_navigate',
+        toolInput: {
+          url: 'https://amazon.com/checkout',
+          amount: 10000,
+        },
+      };
+      
+      const result = await detector.detect(context);
+      expect(result.detected).toBe(true);
+      // No limit checking happens, so no limit info in metadata
+      expect(result.metadata?.exceededLimit).toBeUndefined();
+      expect(result.metadata?.currentDailyTotal).toBeUndefined();
+    });
   });
 });
