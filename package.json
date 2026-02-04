@@ -27,9 +27,13 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "bin": {
+    "clawsec": "./dist/bin/clawsec.js"
+  },
   "files": [
     "dist",
-    "rules"
+    "rules",
+    "bin"
   ],
   "dependencies": {
     "yaml": "^2.8.2",
