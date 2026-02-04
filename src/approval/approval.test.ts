@@ -22,9 +22,8 @@ import type {
   PendingApprovalRecord,
   PendingApprovalInput,
   ApprovalStore,
-  Detection,
-  ToolCallContext,
 } from './types.js';
+import type { Detection, ToolCallContext } from '../engine/types.js';
 
 // =============================================================================
 // TEST HELPERS
@@ -1603,5 +1602,914 @@ describe('Agent Confirm Integration', () => {
     const result2 = handler.processConfirmation(toolInput);
     expect(result2.valid).toBe(false);
     expect(result2.error).toContain('already approved');
+  });
+});
+
+// =============================================================================
+// WEBHOOK APPROVAL CLIENT TESTS
+// =============================================================================
+
+import {
+  DefaultWebhookApprovalClient,
+  createWebhookApprovalClient,
+  getDefaultWebhookApprovalClient,
+  resetDefaultWebhookApprovalClient,
+  createWebhookRequest,
+} from './webhook.js';
+import type {
+  HttpClient,
+  HttpResponse,
+  WebhookApprovalRequest,
+  WebhookApprovalResponse,
+} from './webhook.js';
+import type { WebhookApproval } from '../config/schema.js';
+
+/**
+ * Mock HTTP client for testing
+ */
+class MockHttpClient implements HttpClient {
+  private nextResponse: HttpResponse | null = null;
+  private nextError: Error | null = null;
+  public lastRequest: { url: string; body: unknown; options: { headers?: Record<string, string>; timeoutMs?: number } } | null = null;
+
+  setNextResponse(response: HttpResponse): void {
+    this.nextResponse = response;
+    this.nextError = null;
+  }
+
+  setNextError(error: Error): void {
+    this.nextError = error;
+    this.nextResponse = null;
+  }
+
+  async post(
+    url: string,
+    body: unknown,
+    options: { headers?: Record<string, string>; timeoutMs?: number }
+  ): Promise<HttpResponse> {
+    this.lastRequest = { url, body, options };
+
+    if (this.nextError) {
+      throw this.nextError;
+    }
+
+    if (this.nextResponse) {
+      return this.nextResponse;
+    }
+
+    return { status: 200, body: { approved: true } };
+  }
+}
+
+/**
+ * Create a test webhook config
+ */
+function createTestWebhookConfig(overrides: Partial<WebhookApproval> = {}): WebhookApproval {
+  return {
+    enabled: true,
+    url: 'https://api.example.com/approve',
+    timeout: 30,
+    headers: {},
+    ...overrides,
+  };
+}
+
+/**
+ * Create a test webhook request
+ */
+function createTestWebhookRequest(overrides: Partial<WebhookApprovalRequest> = {}): WebhookApprovalRequest {
+  const now = Date.now();
+  return {
+    id: `webhook-test-${now}`,
+    detection: createTestDetection(),
+    toolCall: {
+      name: 'bash',
+      input: { command: 'rm -rf /tmp/test' },
+    },
+    timestamp: now,
+    expiresAt: now + 300_000,
+    ...overrides,
+  };
+}
+
+describe('DefaultWebhookApprovalClient', () => {
+  let store: InMemoryApprovalStore;
+  let mockHttpClient: MockHttpClient;
+
+  beforeEach(() => {
+    store = createApprovalStore({ cleanupIntervalMs: 0 });
+    mockHttpClient = new MockHttpClient();
+  });
+
+  afterEach(() => {
+    store.stopCleanupTimer();
+    store.clear();
+    resetDefaultWebhookApprovalClient();
+  });
+
+  describe('isEnabled', () => {
+    it('should return true when enabled and URL is configured', () => {
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig({ enabled: true }),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      expect(client.isEnabled()).toBe(true);
+    });
+
+    it('should return false when disabled', () => {
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig({ enabled: false }),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      expect(client.isEnabled()).toBe(false);
+    });
+
+    it('should return false when URL is not configured', () => {
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig({ enabled: true, url: undefined }),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      expect(client.isEnabled()).toBe(false);
+    });
+  });
+
+  describe('requestApproval', () => {
+    describe('successful sync approval', () => {
+      it('should send request and return approved response', async () => {
+        mockHttpClient.setNextResponse({
+          status: 200,
+          body: { approved: true, approvedBy: 'admin', reason: 'Looks safe' },
+        });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest({ id: 'sync-approve-1' });
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(true);
+        expect(result.waitingForCallback).toBe(false);
+        expect(result.response?.approved).toBe(true);
+        expect(result.response?.approvedBy).toBe('admin');
+        expect(result.response?.reason).toBe('Looks safe');
+      });
+
+      it('should send request and return denied response', async () => {
+        mockHttpClient.setNextResponse({
+          status: 200,
+          body: { approved: false, approvedBy: 'security', reason: 'Too risky' },
+        });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest({ id: 'sync-deny-1' });
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(true);
+        expect(result.waitingForCallback).toBe(false);
+        expect(result.response?.approved).toBe(false);
+        expect(result.response?.reason).toBe('Too risky');
+      });
+
+      it('should include correct payload in request', async () => {
+        mockHttpClient.setNextResponse({ status: 200, body: { approved: true } });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig({ url: 'https://webhook.example.com/approve' }),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest({
+          id: 'payload-test',
+          detection: createTestDetection({ category: 'destructive', severity: 'critical' }),
+          toolCall: { name: 'bash', input: { command: 'rm -rf /' } },
+        });
+
+        await client.requestApproval(request);
+
+        expect(mockHttpClient.lastRequest?.url).toBe('https://webhook.example.com/approve');
+        expect(mockHttpClient.lastRequest?.body).toMatchObject({
+          id: 'payload-test',
+          detection: { category: 'destructive', severity: 'critical' },
+          toolCall: { name: 'bash', input: { command: 'rm -rf /' } },
+        });
+      });
+
+      it('should include custom headers', async () => {
+        mockHttpClient.setNextResponse({ status: 200, body: { approved: true } });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig({
+            headers: {
+              'Authorization': 'Bearer secret-token',
+              'X-Custom-Header': 'custom-value',
+            },
+          }),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        await client.requestApproval(request);
+
+        expect(mockHttpClient.lastRequest?.options.headers).toMatchObject({
+          'Authorization': 'Bearer secret-token',
+          'X-Custom-Header': 'custom-value',
+        });
+      });
+
+      it('should use configured timeout', async () => {
+        mockHttpClient.setNextResponse({ status: 200, body: { approved: true } });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig({ timeout: 60 }),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        await client.requestApproval(request);
+
+        expect(mockHttpClient.lastRequest?.options.timeoutMs).toBe(60000);
+      });
+    });
+
+    describe('async approval (202 response)', () => {
+      it('should return waitingForCallback on 202 response', async () => {
+        mockHttpClient.setNextResponse({ status: 202, body: {} });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest({ id: 'async-1' });
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(true);
+        expect(result.waitingForCallback).toBe(true);
+        expect(result.response).toBeUndefined();
+      });
+
+      it('should include callback URL when template is provided', async () => {
+        mockHttpClient.setNextResponse({ status: 202, body: {} });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+          callbackUrlTemplate: 'https://api.example.com/callback/{id}',
+        });
+
+        const request = createTestWebhookRequest({ id: 'callback-test' });
+        await client.requestApproval(request);
+
+        const payload = mockHttpClient.lastRequest?.body as WebhookApprovalRequest;
+        expect(payload.callbackUrl).toBe('https://api.example.com/callback/callback-test');
+      });
+    });
+
+    describe('timeout handling', () => {
+      it('should return error on timeout', async () => {
+        const abortError = new Error('The operation was aborted');
+        abortError.name = 'AbortError';
+        mockHttpClient.setNextError(abortError);
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig({ timeout: 5 }),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('timeout');
+        expect(result.waitingForCallback).toBe(false);
+      });
+    });
+
+    describe('network errors', () => {
+      it('should handle network errors gracefully', async () => {
+        mockHttpClient.setNextError(new Error('fetch failed: network error'));
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Network error');
+        expect(result.waitingForCallback).toBe(false);
+      });
+
+      it('should handle generic errors', async () => {
+        mockHttpClient.setNextError(new Error('Something went wrong'));
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Something went wrong');
+        expect(result.waitingForCallback).toBe(false);
+      });
+    });
+
+    describe('invalid responses', () => {
+      it('should return error for invalid response format (missing approved)', async () => {
+        mockHttpClient.setNextResponse({ status: 200, body: { result: 'ok' } });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid response format');
+        expect(result.waitingForCallback).toBe(false);
+      });
+
+      it('should return error for non-object response', async () => {
+        mockHttpClient.setNextResponse({ status: 200, body: 'ok' });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid response format');
+      });
+
+      it('should return error for null response body', async () => {
+        mockHttpClient.setNextResponse({ status: 200, body: null });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid response format');
+      });
+    });
+
+    describe('HTTP error responses', () => {
+      it('should handle 4xx client errors', async () => {
+        mockHttpClient.setNextResponse({
+          status: 400,
+          body: { error: 'Invalid request format' },
+        });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Client error (400)');
+        expect(result.error).toContain('Invalid request format');
+        expect(result.waitingForCallback).toBe(false);
+      });
+
+      it('should handle 401 unauthorized', async () => {
+        mockHttpClient.setNextResponse({
+          status: 401,
+          body: { message: 'Unauthorized' },
+        });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Client error (401)');
+        expect(result.error).toContain('Unauthorized');
+      });
+
+      it('should handle 5xx server errors', async () => {
+        mockHttpClient.setNextResponse({
+          status: 500,
+          body: { error: 'Internal server error' },
+        });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Server error (500)');
+        expect(result.error).toContain('Internal server error');
+        expect(result.waitingForCallback).toBe(false);
+      });
+
+      it('should handle 503 service unavailable', async () => {
+        mockHttpClient.setNextResponse({
+          status: 503,
+          body: 'Service temporarily unavailable',
+        });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Server error (503)');
+        expect(result.error).toContain('Service temporarily unavailable');
+      });
+
+      it('should handle unexpected status codes', async () => {
+        mockHttpClient.setNextResponse({ status: 301, body: {} });
+
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig(),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Unexpected status code: 301');
+      });
+    });
+
+    describe('disabled webhook', () => {
+      it('should return error when webhook is disabled', async () => {
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig({ enabled: false }),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('not enabled');
+        expect(result.waitingForCallback).toBe(false);
+      });
+
+      it('should return error when URL is not configured', async () => {
+        const client = createWebhookApprovalClient({
+          webhookConfig: createTestWebhookConfig({ enabled: true, url: undefined }),
+          httpClient: mockHttpClient,
+          store,
+        });
+
+        const request = createTestWebhookRequest();
+        const result = await client.requestApproval(request);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('not enabled');
+        expect(result.waitingForCallback).toBe(false);
+      });
+    });
+  });
+
+  describe('handleCallback', () => {
+    it('should approve pending approval on positive callback', () => {
+      const input = createTestApprovalInput({ id: 'callback-approve' });
+      store.add(input);
+
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = {
+        approved: true,
+        approvedBy: 'slack-user',
+        reason: 'Approved via Slack',
+      };
+
+      const result = client.handleCallback('callback-approve', response);
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Approved');
+      expect(result.message).toContain('slack-user');
+      expect(result.message).toContain('Approved via Slack');
+      expect(result.record?.status).toBe('approved');
+      expect(result.record?.approvedBy).toBe('slack-user');
+    });
+
+    it('should deny pending approval on negative callback', () => {
+      const input = createTestApprovalInput({
+        id: 'callback-deny',
+        toolCall: createTestToolCall({ toolName: 'dangerous_tool' }),
+      });
+      store.add(input);
+
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = {
+        approved: false,
+        approvedBy: 'security-team',
+        reason: 'Policy violation',
+      };
+
+      const result = client.handleCallback('callback-deny', response);
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Denied');
+      expect(result.message).toContain('security-team');
+      expect(result.message).toContain('Policy violation');
+      expect(result.message).toContain('dangerous_tool');
+      expect(result.record?.status).toBe('denied');
+    });
+
+    it('should use default approver when not provided', () => {
+      const input = createTestApprovalInput({ id: 'callback-default-approver' });
+      store.add(input);
+
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = { approved: true };
+      const result = client.handleCallback('callback-default-approver', response);
+
+      expect(result.success).toBe(true);
+      expect(result.record?.approvedBy).toBe('webhook');
+    });
+
+    it('should return error for empty ID', () => {
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = { approved: true };
+      const result = client.handleCallback('', response);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Invalid');
+    });
+
+    it('should return error for non-existent ID', () => {
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = { approved: true };
+      const result = client.handleCallback('non-existent', response);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('not found');
+    });
+
+    it('should return error for expired approval', () => {
+      const pastTime = Date.now() - 1000;
+      const input = createTestApprovalInput({
+        id: 'callback-expired',
+        expiresAt: pastTime,
+      });
+      store.add(input);
+
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = { approved: true };
+      const result = client.handleCallback('callback-expired', response);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('expired');
+    });
+
+    it('should return error for already approved', () => {
+      const input = createTestApprovalInput({ id: 'callback-already-approved' });
+      store.add(input);
+      store.approve('callback-already-approved');
+
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = { approved: true };
+      const result = client.handleCallback('callback-already-approved', response);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('already approved');
+    });
+
+    it('should return error for already denied', () => {
+      const input = createTestApprovalInput({ id: 'callback-already-denied' });
+      store.add(input);
+      store.deny('callback-already-denied');
+
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = { approved: false };
+      const result = client.handleCallback('callback-already-denied', response);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('already denied');
+    });
+
+    it('should trim whitespace from ID', () => {
+      const input = createTestApprovalInput({ id: 'callback-trimmed' });
+      store.add(input);
+
+      const client = createWebhookApprovalClient({
+        webhookConfig: createTestWebhookConfig(),
+        httpClient: mockHttpClient,
+        store,
+      });
+
+      const response: WebhookApprovalResponse = { approved: true };
+      const result = client.handleCallback('  callback-trimmed  ', response);
+
+      expect(result.success).toBe(true);
+      expect(result.record?.status).toBe('approved');
+    });
+  });
+});
+
+describe('createWebhookRequest helper', () => {
+  let store: InMemoryApprovalStore;
+
+  beforeEach(() => {
+    store = createApprovalStore({ cleanupIntervalMs: 0 });
+  });
+
+  afterEach(() => {
+    store.stopCleanupTimer();
+    store.clear();
+  });
+
+  it('should create webhook request from pending approval record', () => {
+    const input = createTestApprovalInput({
+      id: 'helper-test',
+      detection: createTestDetection({ category: 'secrets', severity: 'high' }),
+      toolCall: createTestToolCall({ toolName: 'write_file', toolInput: { path: '/etc/passwd' } }),
+    });
+    store.add(input);
+
+    const record = store.get('helper-test')!;
+    const request = createWebhookRequest(record);
+
+    expect(request.id).toBe('helper-test');
+    expect(request.detection.category).toBe('secrets');
+    expect(request.toolCall.name).toBe('write_file');
+    expect(request.toolCall.input).toEqual({ path: '/etc/passwd' });
+    expect(request.timestamp).toBe(record.createdAt);
+    expect(request.expiresAt).toBe(record.expiresAt);
+  });
+
+  it('should include callback URL when provided', () => {
+    const input = createTestApprovalInput({ id: 'helper-callback' });
+    store.add(input);
+
+    const record = store.get('helper-callback')!;
+    const request = createWebhookRequest(record, 'https://callback.example.com/approve/helper-callback');
+
+    expect(request.callbackUrl).toBe('https://callback.example.com/approve/helper-callback');
+  });
+});
+
+describe('Default webhook approval client singleton', () => {
+  afterEach(() => {
+    resetDefaultWebhookApprovalClient();
+    resetDefaultApprovalStore();
+  });
+
+  it('should return the same instance on multiple calls', () => {
+    const client1 = getDefaultWebhookApprovalClient();
+    const client2 = getDefaultWebhookApprovalClient();
+
+    expect(client1).toBe(client2);
+  });
+
+  it('should create new instance after reset', () => {
+    const client1 = getDefaultWebhookApprovalClient();
+    resetDefaultWebhookApprovalClient();
+    const client2 = getDefaultWebhookApprovalClient();
+
+    expect(client1).not.toBe(client2);
+  });
+
+  it('should be disabled by default', () => {
+    const client = getDefaultWebhookApprovalClient();
+    expect(client.isEnabled()).toBe(false);
+  });
+});
+
+// =============================================================================
+// WEBHOOK INTEGRATION TESTS
+// =============================================================================
+
+describe('Webhook Integration', () => {
+  let store: InMemoryApprovalStore;
+  let mockHttpClient: MockHttpClient;
+  let client: DefaultWebhookApprovalClient;
+
+  beforeEach(() => {
+    store = createApprovalStore({ cleanupIntervalMs: 0 });
+    mockHttpClient = new MockHttpClient();
+    client = createWebhookApprovalClient({
+      webhookConfig: createTestWebhookConfig(),
+      httpClient: mockHttpClient,
+      store,
+      callbackUrlTemplate: 'https://api.example.com/callback/{id}',
+    });
+  });
+
+  afterEach(() => {
+    store.stopCleanupTimer();
+    store.clear();
+  });
+
+  it('should handle complete sync approval flow', async () => {
+    // 1. Create pending approval
+    const input = createTestApprovalInput({
+      id: 'webhook-flow-sync',
+      detection: createTestDetection({ category: 'destructive' }),
+      toolCall: createTestToolCall({ toolName: 'bash', toolInput: { command: 'rm -rf /' } }),
+    });
+    store.add(input);
+
+    // 2. Create webhook request
+    const record = store.get('webhook-flow-sync')!;
+    const request = createWebhookRequest(record);
+
+    // 3. Simulate webhook returning immediate approval
+    mockHttpClient.setNextResponse({
+      status: 200,
+      body: { approved: true, approvedBy: 'admin', reason: 'Safe operation' },
+    });
+
+    const result = await client.requestApproval(request);
+
+    // 4. Verify immediate result
+    expect(result.success).toBe(true);
+    expect(result.waitingForCallback).toBe(false);
+    expect(result.response?.approved).toBe(true);
+  });
+
+  it('should handle complete async approval flow', async () => {
+    // 1. Create pending approval
+    const input = createTestApprovalInput({
+      id: 'webhook-flow-async',
+      detection: createTestDetection({ category: 'destructive' }),
+      toolCall: createTestToolCall({ toolName: 'bash' }),
+    });
+    store.add(input);
+
+    // 2. Create webhook request
+    const record = store.get('webhook-flow-async')!;
+    const request = createWebhookRequest(record);
+
+    // 3. Simulate webhook returning 202 (pending)
+    mockHttpClient.setNextResponse({ status: 202, body: {} });
+
+    const sendResult = await client.requestApproval(request);
+
+    // 4. Verify waiting for callback
+    expect(sendResult.success).toBe(true);
+    expect(sendResult.waitingForCallback).toBe(true);
+
+    // 5. Verify record is still pending
+    expect(store.get('webhook-flow-async')?.status).toBe('pending');
+
+    // 6. Simulate callback from external system
+    const callbackResult = client.handleCallback('webhook-flow-async', {
+      approved: true,
+      approvedBy: 'slack-user',
+      reason: 'Approved in Slack',
+    });
+
+    // 7. Verify approved
+    expect(callbackResult.success).toBe(true);
+    expect(store.get('webhook-flow-async')?.status).toBe('approved');
+    expect(store.get('webhook-flow-async')?.approvedBy).toBe('slack-user');
+  });
+
+  it('should handle denial flow', async () => {
+    // 1. Create pending approval
+    const input = createTestApprovalInput({
+      id: 'webhook-flow-deny',
+      toolCall: createTestToolCall({ toolName: 'dangerous_tool' }),
+    });
+    store.add(input);
+
+    // 2. Create webhook request
+    const record = store.get('webhook-flow-deny')!;
+    const request = createWebhookRequest(record);
+
+    // 3. Simulate webhook returning denial
+    mockHttpClient.setNextResponse({
+      status: 200,
+      body: { approved: false, reason: 'Security policy violation' },
+    });
+
+    const result = await client.requestApproval(request);
+
+    // 4. Verify denial
+    expect(result.success).toBe(true);
+    expect(result.response?.approved).toBe(false);
+    expect(result.response?.reason).toBe('Security policy violation');
+  });
+
+  it('should handle webhook errors gracefully', async () => {
+    // 1. Create pending approval
+    const input = createTestApprovalInput({ id: 'webhook-flow-error' });
+    store.add(input);
+
+    // 2. Create webhook request
+    const record = store.get('webhook-flow-error')!;
+    const request = createWebhookRequest(record);
+
+    // 3. Simulate webhook error
+    mockHttpClient.setNextResponse({
+      status: 500,
+      body: { error: 'Database connection failed' },
+    });
+
+    const result = await client.requestApproval(request);
+
+    // 4. Verify error handling
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Server error');
+    expect(result.error).toContain('Database connection failed');
+
+    // 5. Verify record is still pending (not modified)
+    expect(store.get('webhook-flow-error')?.status).toBe('pending');
   });
 });

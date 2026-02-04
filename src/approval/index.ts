@@ -44,3 +44,23 @@ export {
   getDefaultAgentConfirmHandler,
   resetDefaultAgentConfirmHandler,
 } from './agent-confirm.js';
+
+// Webhook approval client
+export type {
+  WebhookApprovalRequest,
+  WebhookApprovalResponse,
+  WebhookApprovalResult,
+  WebhookApprovalClient,
+  HttpClient,
+  HttpResponse,
+  WebhookApprovalClientConfig,
+} from './webhook.js';
+export {
+  FetchHttpClient,
+  DefaultWebhookApprovalClient,
+  createWebhookApprovalClient,
+  getDefaultWebhookApprovalClient,
+  configureDefaultWebhookApprovalClient,
+  resetDefaultWebhookApprovalClient,
+  createWebhookRequest,
+} from './webhook.js';
