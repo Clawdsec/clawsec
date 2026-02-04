@@ -10,9 +10,12 @@ import {
   formatTestResult,
   auditCommand,
   formatAuditResult,
+  feedbackCommand,
+  formatFeedbackResult,
 } from './commands/index.js';
-import type { CLIOptions, AuditOptions } from './commands/index.js';
+import type { CLIOptions, AuditOptions, FeedbackOptions } from './commands/index.js';
 import type { ThreatCategory } from '../engine/index.js';
+import type { FeedbackType } from '../feedback/index.js';
 
 // Re-export commands and types
 export * from './commands/index.js';
@@ -30,6 +33,7 @@ Commands:
   status                  Show configuration status and enabled rules
   test                    Test a rule against sample input
   audit                   View audit log of detections
+  feedback                Submit or view feedback on detection accuracy
 
 Options:
   --config <path>         Path to clawsec.yaml config file
@@ -65,6 +69,24 @@ Command: audit
     clawsec audit
     clawsec audit --limit 20
     clawsec audit --category secrets
+
+Command: feedback
+  Submit or view feedback on detection accuracy.
+  
+  Options:
+    --false-positive <id> Report a false positive (blocked but shouldn't have been)
+    --false-negative <desc> Report a false negative (missed threat)
+    --category <cat>      Suggested category for false negative
+    --list                List all feedback entries
+    --type <type>         Filter list by type (false-positive, false-negative)
+    --show <id>           Show details of a specific feedback entry
+  
+  Examples:
+    clawsec feedback --false-positive 1
+    clawsec feedback --false-negative "API key leaked" --category secrets
+    clawsec feedback --list
+    clawsec feedback --list --type false-positive
+    clawsec feedback --show abc123
 `);
 }
 
@@ -212,6 +234,56 @@ export async function runCLI(args: string[]): Promise<number> {
         const result = await auditCommand(auditOptions);
         console.log(formatAuditResult(result, auditOptions));
         return 0;
+      }
+
+      case 'feedback': {
+        const feedbackOptions: FeedbackOptions = {};
+
+        // Check for list operation
+        if (parsed.options.list === true) {
+          feedbackOptions.list = true;
+        }
+
+        // Check for show operation
+        if (typeof parsed.options.show === 'string') {
+          feedbackOptions.show = parsed.options.show;
+        }
+
+        // Check for false positive
+        if (typeof parsed.options['false-positive'] === 'string') {
+          feedbackOptions.falsePositive = parsed.options['false-positive'];
+        }
+
+        // Check for false negative
+        if (typeof parsed.options['false-negative'] === 'string') {
+          feedbackOptions.falseNegative = parsed.options['false-negative'];
+        }
+
+        // Parse type filter
+        if (typeof parsed.options.type === 'string') {
+          const validTypes = ['false-positive', 'false-negative'];
+          if (!validTypes.includes(parsed.options.type)) {
+            console.error(`Error: Invalid type "${parsed.options.type}"`);
+            console.error(`Valid types: ${validTypes.join(', ')}`);
+            return 1;
+          }
+          feedbackOptions.type = parsed.options.type as FeedbackType;
+        }
+
+        // Parse category for false negative
+        if (typeof parsed.options.category === 'string') {
+          const validCategories = ['purchase', 'website', 'destructive', 'secrets', 'exfiltration'];
+          if (!validCategories.includes(parsed.options.category)) {
+            console.error(`Error: Invalid category "${parsed.options.category}"`);
+            console.error(`Valid categories: ${validCategories.join(', ')}`);
+            return 1;
+          }
+          feedbackOptions.category = parsed.options.category as ThreatCategory;
+        }
+
+        const result = await feedbackCommand(feedbackOptions);
+        console.log(formatFeedbackResult(result, feedbackOptions.show !== undefined));
+        return result.success ? 0 : 1;
       }
 
       default:

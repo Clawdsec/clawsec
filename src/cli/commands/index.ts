@@ -34,3 +34,16 @@ export {
   getAuditLog,
   createAuditEntry,
 } from './audit.js';
+
+// Feedback command
+export {
+  feedbackCommand,
+  formatFeedbackResult,
+  formatFeedbackSummary,
+} from './feedback.js';
+
+// Re-export feedback types used by CLI
+export type {
+  FeedbackOptions,
+  FeedbackResult,
+} from '../../feedback/index.js';
