@@ -24,9 +24,7 @@ import { createAnalyzer } from '../../engine/analyzer.js';
 import { createActionExecutor } from '../../actions/executor.js';
 import { createAgentConfirmHandler } from '../../approval/agent-confirm.js';
 import { getDefaultApprovalStore } from '../../approval/store.js';
-import { createLogger } from '../../utils/logger.js';
-
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * Options for creating a before-tool-call handler
@@ -147,21 +145,26 @@ function createDisabledResult(): BeforeToolCallResult {
  *
  * @param config - Clawsec configuration
  * @param options - Optional custom components
+ * @param logger - Optional logger instance
  * @returns BeforeToolCallHandler function
  */
 export function createBeforeToolCallHandler(
   config: ClawsecConfig,
-  options?: BeforeToolCallHandlerOptions
+  options?: BeforeToolCallHandlerOptions,
+  logger?: Logger
 ): BeforeToolCallHandler {
+  const log = logger ?? createLogger(null, null);
+
   // Create or use provided components
-  const analyzer = options?.analyzer ?? createAnalyzer(config);
-  const executor = options?.executor ?? createActionExecutor();
+  const analyzer = options?.analyzer ?? createAnalyzer(config, undefined, log);
+  const executor = options?.executor ?? createActionExecutor({ logger: log });
   const agentConfirm =
     options?.agentConfirm ??
     createAgentConfirmHandler({
       enabled: config.approval?.agentConfirm?.enabled ?? true,
       parameterName: config.approval?.agentConfirm?.parameterName,
       store: getDefaultApprovalStore(),
+      logger: log,
     });
 
   // Get the parameter name from config
@@ -169,11 +172,11 @@ export function createBeforeToolCallHandler(
 
   return async (context: HookToolCallContext): Promise<BeforeToolCallResult> => {
     const toolName = context.toolName;
-    logger.debug(`[Hook:before-tool-call] Entry: tool=${toolName}`);
+    log.debug(`[Hook:before-tool-call] Entry: tool=${toolName}`);
 
     // 1. Check if plugin is disabled
     if (config.global?.enabled === false) {
-      logger.debug(`[Hook:before-tool-call] Plugin disabled, allowing tool`);
+      log.debug(`[Hook:before-tool-call] Plugin disabled, allowing tool`);
       return createDisabledResult();
     }
 
@@ -197,11 +200,11 @@ export function createBeforeToolCallHandler(
             context.toolInput,
             confirmParamName
           );
-          logger.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow (agent-confirm validated)`);
+          log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow (agent-confirm validated)`);
           return createAgentConfirmAllowResult(strippedInput);
         } else {
           // Invalid confirmation - block
-          logger.warn(`[Hook:before-tool-call] Exit: tool=${toolName}, result=block (invalid agent-confirm)`);
+          log.warn(`[Hook:before-tool-call] Exit: tool=${toolName}, result=block (invalid agent-confirm)`);
           return createAgentConfirmInvalidResult(processResult.error);
         }
       }
@@ -213,7 +216,7 @@ export function createBeforeToolCallHandler(
 
     // 4. If no detections or action is allow/log/warn, handle appropriately
     if (analysis.action === 'allow') {
-      logger.debug(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow`);
+      log.debug(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow`);
       return createAllowResult();
     }
 
@@ -228,7 +231,7 @@ export function createBeforeToolCallHandler(
 
     // 6. Convert to BeforeToolCallResult
     const result = toBeforeToolCallResult(actionResult, analysis.primaryDetection);
-    logger.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=${result.allow ? 'allow' : analysis.action}`);
+    log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=${result.allow ? 'allow' : analysis.action}`);
     return result;
   };
 }

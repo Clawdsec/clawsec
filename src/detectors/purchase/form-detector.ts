@@ -324,7 +324,7 @@ export function containsPaymentValues(text: string): boolean {
 export class FormDetector implements SubDetector {
   private severity: Severity;
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = "critical", _logger?: any) {
     this.severity = severity;
   }
 
@@ -375,6 +375,6 @@ export class FormDetector implements SubDetector {
 /**
  * Create a form detector with the given configuration
  */
-export function createFormDetector(severity: Severity = 'critical'): FormDetector {
-  return new FormDetector(severity);
+export function createFormDetector(severity: Severity = "critical", logger?: any): FormDetector {
+  return new FormDetector(severity, logger);
 }

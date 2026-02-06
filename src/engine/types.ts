@@ -4,6 +4,7 @@
  */
 
 import type { Severity, ClawsecConfig } from '../config/index.js';
+import type { Logger } from '../utils/logger.js';
 
 /**
  * Actions that can be returned by the analyzer
@@ -111,6 +112,8 @@ export interface AnalyzerConfig {
   cacheTtlMs?: number;
   /** Optional LLM client for analyzing ambiguous detections */
   llmClient?: LLMClient;
+  /** Optional logger instance */
+  logger?: Logger;
 }
 
 /**

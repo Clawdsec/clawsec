@@ -9,16 +9,14 @@ import { createBlockHandler } from './block.js';
 import { createConfirmHandler } from './confirm.js';
 import { createWarnHandler } from './warn.js';
 import { createLogHandler } from './log.js';
-import { createLogger as createUtilLogger } from '../utils/logger.js';
-
-const logger = createUtilLogger(null, null);
+import { createLogger as createUtilLogger, type Logger } from '../utils/logger.js';
 
 /**
  * Configuration for the action executor
  */
 export interface ExecutorConfig {
   /** Logger to use for action logging */
-  logger?: ActionLogger;
+  logger?: ActionLogger | Logger;
   /** Custom block handler */
   blockHandler?: ActionHandler;
   /** Custom confirm handler */
@@ -33,18 +31,44 @@ export interface ExecutorConfig {
  * Default action executor implementation
  */
 export class DefaultActionExecutor implements ActionExecutor {
-  private logger: ActionLogger;
+  private logger: Logger;
+  private actionLogger: ActionLogger;
   private blockHandler: ActionHandler;
   private confirmHandler: ActionHandler;
   private warnHandler: ActionHandler;
   private logHandler: ActionHandler;
 
   constructor(config: ExecutorConfig = {}) {
-    this.logger = config.logger ?? noOpLogger;
-    this.blockHandler = config.blockHandler ?? createBlockHandler(this.logger);
-    this.confirmHandler = config.confirmHandler ?? createConfirmHandler(this.logger);
-    this.warnHandler = config.warnHandler ?? createWarnHandler(this.logger);
-    this.logHandler = config.logHandler ?? createLogHandler(this.logger);
+    // Accept both Logger and ActionLogger types
+    const providedLogger = config.logger;
+
+    // If logger is provided and has the Logger interface, use it for internal logging
+    this.logger = providedLogger && 'debug' in providedLogger
+      ? (providedLogger as Logger)
+      : createUtilLogger(null, null);
+
+    // For action handlers, adapt Logger to ActionLogger if needed
+    if (providedLogger && 'debug' in providedLogger) {
+      // It's a Logger - create ActionLogger adapter
+      const logger = providedLogger as Logger;
+      this.actionLogger = {
+        debug: (msg: string, context?: Record<string, unknown>) => logger.debug(msg, context),
+        warn: (msg: string, context?: Record<string, unknown>) => logger.warn(msg, context),
+        info: (msg: string, context?: Record<string, unknown>) => logger.info(msg, context),
+        error: (msg: string, context?: Record<string, unknown>) => logger.error(msg, context),
+      };
+    } else if (providedLogger) {
+      // It's already an ActionLogger
+      this.actionLogger = providedLogger as ActionLogger;
+    } else {
+      // No logger provided
+      this.actionLogger = noOpLogger;
+    }
+
+    this.blockHandler = config.blockHandler ?? createBlockHandler(this.actionLogger);
+    this.confirmHandler = config.confirmHandler ?? createConfirmHandler(this.actionLogger);
+    this.warnHandler = config.warnHandler ?? createWarnHandler(this.actionLogger);
+    this.logHandler = config.logHandler ?? createLogHandler(this.actionLogger);
   }
 
   /**
@@ -54,12 +78,12 @@ export class DefaultActionExecutor implements ActionExecutor {
     const { analysis, config } = context;
     const action = analysis.action;
 
-    logger.debug(`[Executor] Entry: action=${action}, detections=${analysis.detections.length}`);
+    this.logger.debug(`[Executor] Entry: action=${action}, detections=${analysis.detections.length}`);
 
     // Check if the plugin is disabled
     if (config.global?.enabled === false) {
       this.logger.debug('Plugin disabled, allowing action');
-      logger.debug(`[Executor] Exit: plugin disabled, allowing`);
+      this.logger.debug(`[Executor] Exit: plugin disabled, allowing`);
       return {
         allowed: true,
         logged: false,
@@ -67,7 +91,7 @@ export class DefaultActionExecutor implements ActionExecutor {
     }
 
     // Route to appropriate handler based on action
-    logger.debug(`[Executor] Routing to ${action} handler`);
+    this.logger.debug(`[Executor] Routing to ${action} handler`);
     
     let result: ActionResult;
     switch (action) {
@@ -98,7 +122,7 @@ export class DefaultActionExecutor implements ActionExecutor {
         };
     }
 
-    logger.debug(`[Executor] Exit: action=${action}, allowed=${result.allowed}`);
+    this.logger.debug(`[Executor] Exit: action=${action}, allowed=${result.allowed}`);
     return result;
   }
 

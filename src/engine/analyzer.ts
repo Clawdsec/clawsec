@@ -23,9 +23,7 @@ import type {
   LLMClient,
   LLMAnalysisResult,
 } from './types.js';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../utils/logger.js';
 import { compareSeverity } from './types.js';
 import { createCache, createNoOpCache, generateCacheKey, DEFAULT_CACHE_TTL_MS } from './cache.js';
 import type { ClawsecConfig, Severity } from '../config/index.js';
@@ -160,6 +158,7 @@ export class HybridAnalyzer implements Analyzer {
   private cacheEnabled: boolean;
   private cacheTtlMs: number;
   private llmClient?: LLMClient;
+  private logger: Logger;
 
   // Detectors
   private purchaseDetector: PurchaseDetector;
@@ -173,6 +172,7 @@ export class HybridAnalyzer implements Analyzer {
     this.cacheEnabled = analyzerConfig.enableCache ?? true;
     this.cacheTtlMs = analyzerConfig.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
     this.llmClient = analyzerConfig.llmClient;
+    this.logger = analyzerConfig.logger ?? createLogger(null, null);
     
     // Initialize cache
     this.cache = this.cacheEnabled
@@ -181,23 +181,23 @@ export class HybridAnalyzer implements Analyzer {
 
     // Initialize detectors from config
     this.purchaseDetector = this.config.rules.purchase
-      ? createPurchaseDetector(this.config.rules.purchase)
+      ? createPurchaseDetector(this.config.rules.purchase, undefined, this.logger)
       : createDefaultPurchaseDetector();
 
     this.websiteDetector = this.config.rules.website
-      ? createWebsiteDetector(this.config.rules.website)
+      ? createWebsiteDetector(this.config.rules.website, this.logger)
       : createDefaultWebsiteDetector();
 
     this.destructiveDetector = this.config.rules.destructive
-      ? createDestructiveDetector(this.config.rules.destructive)
+      ? createDestructiveDetector(this.config.rules.destructive, this.logger)
       : createDefaultDestructiveDetector();
 
     this.secretsDetector = this.config.rules.secrets
-      ? createSecretsDetector(this.config.rules.secrets)
+      ? createSecretsDetector(this.config.rules.secrets, this.logger)
       : createDefaultSecretsDetector();
 
     this.exfiltrationDetector = this.config.rules.exfiltration
-      ? createExfiltrationDetector(this.config.rules.exfiltration)
+      ? createExfiltrationDetector(this.config.rules.exfiltration, this.logger)
       : createDefaultExfiltrationDetector();
   }
 
@@ -209,7 +209,7 @@ export class HybridAnalyzer implements Analyzer {
     const toolName = context.toolName;
     const url = context.url || 'none';
 
-    logger.debug(`[Analyzer] Starting analysis: tool=${toolName}, url=${url}`);
+    this.logger.debug(`[Analyzer] Starting analysis: tool=${toolName}, url=${url}`);
 
     // Check if globally disabled
     if (!this.config.global?.enabled) {
@@ -229,17 +229,17 @@ export class HybridAnalyzer implements Analyzer {
     if (this.cacheEnabled) {
       const cachedResult = this.cache.get(cacheKey);
       if (cachedResult) {
-        logger.debug(`[Analyzer] Cache hit: key=${cacheKey}`);
+        this.logger.debug(`[Analyzer] Cache hit: key=${cacheKey}`);
         return {
           ...cachedResult,
           durationMs: Date.now() - startTime,
         };
       }
-      logger.debug(`[Analyzer] Cache miss: key=${cacheKey}`);
+      this.logger.debug(`[Analyzer] Cache miss: key=${cacheKey}`);
     }
 
     // Run all detectors in parallel
-    logger.debug(`[Analyzer] Running 5 detectors`);
+    this.logger.debug(`[Analyzer] Running 5 detectors`);
     const detectionResults = await Promise.all([
       this.runPurchaseDetector(context),
       this.runWebsiteDetector(context),
@@ -251,9 +251,9 @@ export class HybridAnalyzer implements Analyzer {
     // Log detection results
     for (const result of detectionResults) {
       if (result.detected) {
-        logger.info(`[Analyzer] Detection: detector=${result.category}, severity=${result.severity}, confidence=${result.confidence}, reason="${result.reason}"`);
+        this.logger.info(`[Analyzer] Detection: detector=${result.category}, severity=${result.severity}, confidence=${result.confidence}, reason="${result.reason}"`);
       } else {
-        logger.debug(`[Analyzer] No detection: detector=${result.category}`);
+        this.logger.debug(`[Analyzer] No detection: detector=${result.category}`);
       }
     }
 
@@ -264,20 +264,20 @@ export class HybridAnalyzer implements Analyzer {
 
     // Sort by severity (critical > high > medium > low) and confidence
     const sortedDetections = sortDetections(detections);
-    logger.debug(`[Analyzer] Found ${sortedDetections.length} detections, sorted by severity and confidence`);
+    this.logger.debug(`[Analyzer] Found ${sortedDetections.length} detections, sorted by severity and confidence`);
 
     // Determine action based on highest severity detection
     let { action, requiresLLM } = determineAction(sortedDetections, this.config);
-    logger.info(`[Analyzer] Action determined: ${action}, detections=${sortedDetections.length}, requiresLLM=${requiresLLM}`);
+    this.logger.info(`[Analyzer] Action determined: ${action}, detections=${sortedDetections.length}, requiresLLM=${requiresLLM}`);
 
     // If LLM analysis is needed and we have an LLM client, perform analysis
     let llmResult: LLMAnalysisResult | undefined;
     if (requiresLLM && this.llmClient && this.llmClient.isAvailable() && sortedDetections[0]) {
-      logger.info(`[Analyzer] LLM analysis required: confidence in ambiguous range`);
-      logger.debug(`[Analyzer] Invoking LLM analysis`);
+      this.logger.info(`[Analyzer] LLM analysis required: confidence in ambiguous range`);
+      this.logger.debug(`[Analyzer] Invoking LLM analysis`);
       
       llmResult = await this.performLLMAnalysis(sortedDetections[0], context);
-      logger.info(`[Analyzer] LLM response: determination=${llmResult.determination}, confidence=${llmResult.confidence}, suggested_action=${llmResult.suggestedAction}`);
+      this.logger.info(`[Analyzer] LLM response: determination=${llmResult.determination}, confidence=${llmResult.confidence}, suggested_action=${llmResult.suggestedAction}`);
       
       // Adjust action based on LLM result
       const previousAction = action;
@@ -285,13 +285,13 @@ export class HybridAnalyzer implements Analyzer {
       action = adjustedAction;
       
       if (previousAction !== action) {
-        logger.info(`[Analyzer] LLM override: changed action from ${previousAction} to ${action}`);
+        this.logger.info(`[Analyzer] LLM override: changed action from ${previousAction} to ${action}`);
       }
       
       // LLM has made its determination, no longer needs LLM
       requiresLLM = false;
     } else if (requiresLLM && (!this.llmClient || !this.llmClient.isAvailable())) {
-      logger.debug(`[Analyzer] LLM not configured or unavailable, using pattern-based action`);
+      this.logger.debug(`[Analyzer] LLM not configured or unavailable, using pattern-based action`);
     }
 
     // Build result
@@ -307,10 +307,10 @@ export class HybridAnalyzer implements Analyzer {
     // Cache the result (unless it still requires LLM - those shouldn't be cached)
     if (this.cacheEnabled && !requiresLLM) {
       this.cache.set(cacheKey, result);
-      logger.debug(`[Analyzer] Cached result: ttl=${this.cacheTtlMs}ms`);
+      this.logger.debug(`[Analyzer] Cached result: ttl=${this.cacheTtlMs}ms`);
     }
 
-    logger.debug(`[Analyzer] Analysis complete: tool=${toolName}, action=${action}, duration=${Date.now() - startTime}ms`);
+    this.logger.debug(`[Analyzer] Analysis complete: tool=${toolName}, action=${action}, duration=${Date.now() - startTime}ms`);
     return result;
   }
 
@@ -429,7 +429,7 @@ export class HybridAnalyzer implements Analyzer {
     } catch (error) {
       // Return uncertain on error - don't block the flow
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.warn(`[Analyzer] LLM analysis failed: ${errorMessage}, using pattern-based action`);
+      this.logger.warn(`[Analyzer] LLM analysis failed: ${errorMessage}, using pattern-based action`);
       return {
         determination: 'uncertain',
         confidence: 0.5,
@@ -465,12 +465,13 @@ export class HybridAnalyzer implements Analyzer {
 /**
  * Create an analyzer from configuration
  */
-export function createAnalyzer(config: ClawsecConfig, options?: Partial<AnalyzerConfig>): Analyzer {
+export function createAnalyzer(config: ClawsecConfig, options?: Partial<AnalyzerConfig>, logger?: Logger): Analyzer {
   return new HybridAnalyzer({
     config,
     enableCache: options?.enableCache,
     cacheTtlMs: options?.cacheTtlMs,
     llmClient: options?.llmClient,
+    logger,
   });
 }
 

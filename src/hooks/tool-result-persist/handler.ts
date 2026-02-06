@@ -16,9 +16,7 @@ import { createSecretsDetector } from '../../detectors/secrets/index.js';
 import { scan, sanitize } from '../../sanitization/scanner.js';
 import type { ScannerConfig } from '../../sanitization/types.js';
 import { filterOutput } from './filter.js';
-import { createLogger } from '../../utils/logger.js';
-
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * Options for creating a tool-result-persist handler
@@ -102,12 +100,15 @@ function outputToString(output: unknown): string | undefined {
  *
  * @param config - Clawsec configuration
  * @param options - Optional handler options
+ * @param logger - Optional logger instance
  * @returns ToolResultPersistHandler function
  */
 export function createToolResultPersistHandler(
   config: ClawsecConfig,
-  options?: ToolResultPersistHandlerOptions
+  options?: ToolResultPersistHandlerOptions,
+  logger?: Logger
 ): ToolResultPersistHandler {
+  const log = logger ?? createLogger(null, null);
   const filterEnabled = options?.filter ?? true;
   const scanInjectionsEnabled = options?.scanInjections ?? true;
 
@@ -116,7 +117,7 @@ export function createToolResultPersistHandler(
     enabled: config.rules?.secrets?.enabled ?? true,
     severity: config.rules?.secrets?.severity ?? 'critical',
     action: config.rules?.secrets?.action ?? 'block',
-  });
+  }, log);
 
   // Create scanner config from sanitization rules
   const sanitizationConfig = config.rules?.sanitization;
@@ -134,11 +135,11 @@ export function createToolResultPersistHandler(
 
   return async (context: ToolResultContext): Promise<ToolResultPersistResult> => {
     const toolName = context.toolName;
-    logger.debug(`[Hook:tool-result-persist] Entry: tool=${toolName}`);
+    log.debug(`[Hook:tool-result-persist] Entry: tool=${toolName}`);
 
     // 1. Check if plugin is globally disabled
     if (config.global?.enabled === false) {
-      logger.debug(`[Hook:tool-result-persist] Plugin disabled, allowing output`);
+      log.debug(`[Hook:tool-result-persist] Plugin disabled, allowing output`);
       return createAllowResult();
     }
 
@@ -147,12 +148,12 @@ export function createToolResultPersistHandler(
 
     // 2. Run prompt injection scanner if enabled
     if (scanInjectionsEnabled && sanitizationConfig?.enabled !== false && toolOutputString) {
-      logger.debug(`[Hook:tool-result-persist] Scanning for prompt injections`);
+      log.debug(`[Hook:tool-result-persist] Scanning for prompt injections`);
       const scanResult = scan(toolOutputString, scannerConfig);
 
       if (scanResult.hasInjection) {
         const categories = [...new Set(scanResult.matches.map(m => m.category))];
-        logger.warn(`[Hook:tool-result-persist] Prompt injection detected: categories=${categories.join(',')}, matches=${scanResult.matches.length}`);
+        log.warn(`[Hook:tool-result-persist] Prompt injection detected: categories=${categories.join(',')}, matches=${scanResult.matches.length}`);
 
         const injectionRedactions = scanResult.matches.map(match => ({
           type: `injection-${match.category}`,
@@ -161,13 +162,13 @@ export function createToolResultPersistHandler(
 
         // If action is 'block', reject the output entirely
         if (sanitizationConfig?.action === 'block') {
-          logger.info(`[Hook:tool-result-persist] Blocking output due to injection`);
+          log.info(`[Hook:tool-result-persist] Blocking output due to injection`);
           return createBlockResult(injectionRedactions);
         }
 
         // If redactMatches is enabled, sanitize the output
         if (sanitizationConfig?.redactMatches) {
-          logger.info(`[Hook:tool-result-persist] Sanitizing injection patterns`);
+          log.info(`[Hook:tool-result-persist] Sanitizing injection patterns`);
           const sanitizedOutput = sanitize(toolOutputString, scanResult.matches);
           return createFilteredResult(sanitizedOutput, injectionRedactions);
         }
@@ -183,7 +184,7 @@ export function createToolResultPersistHandler(
     }
 
     // 4. Run secrets detector on the tool output
-    logger.debug(`[Hook:tool-result-persist] Scanning for secrets`);
+    log.debug(`[Hook:tool-result-persist] Scanning for secrets`);
     let detections: SecretsDetectionResult[] = [];
     try {
       detections = await secretsDetector.detectAll({
@@ -194,12 +195,12 @@ export function createToolResultPersistHandler(
 
       if (detections.length > 0) {
         const types = [...new Set(detections.map(d => d.metadata?.type || 'unknown'))];
-        logger.info(`[Hook:tool-result-persist] Secrets detected: count=${detections.length}, types=${types.join(',')}`);
+        log.info(`[Hook:tool-result-persist] Secrets detected: count=${detections.length}, types=${types.join(',')}`);
       }
     } catch (error) {
       // CRITICAL BUG FIX: Log error instead of silent failure
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`[Hook:tool-result-persist] Error scanning for secrets: ${errorMessage}, allowing unfiltered output`);
+      log.error(`[Hook:tool-result-persist] Error scanning for secrets: ${errorMessage}, allowing unfiltered output`);
       return createAllowResult();
     }
 
@@ -208,12 +209,12 @@ export function createToolResultPersistHandler(
 
     // 6. If nothing was redacted, allow through unchanged
     if (!filterResult.wasRedacted) {
-      logger.debug(`[Hook:tool-result-persist] Exit: tool=${toolName}, no filtering needed`);
+      log.debug(`[Hook:tool-result-persist] Exit: tool=${toolName}, no filtering needed`);
       return createAllowResult();
     }
 
     // 7. Return filtered result with redaction metadata
-    logger.info(`[Hook:tool-result-persist] Exit: tool=${toolName}, redactions=${filterResult.redactions.length}`);
+    log.info(`[Hook:tool-result-persist] Exit: tool=${toolName}, redactions=${filterResult.redactions.length}`);
     return createFilteredResult(
       filterResult.filteredOutput,
       filterResult.redactions

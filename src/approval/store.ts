@@ -8,9 +8,7 @@ import type {
   PendingApprovalRecord,
   PendingApprovalInput,
 } from './types.js';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../utils/logger.js';
 
 /**
  * Configuration options for the approval store
@@ -20,6 +18,8 @@ export interface ApprovalStoreConfig {
   cleanupIntervalMs?: number;
   /** Whether to remove expired entries on cleanup (vs just marking them expired) */
   removeOnExpiry?: boolean;
+  /** Optional logger instance */
+  logger?: Logger;
 }
 
 /** Default cleanup interval: 60 seconds */
@@ -32,9 +32,11 @@ export class InMemoryApprovalStore implements ApprovalStore {
   private records: Map<string, PendingApprovalRecord> = new Map();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private removeOnExpiry: boolean;
+  private logger: Logger;
 
   constructor(config: ApprovalStoreConfig = {}) {
     this.removeOnExpiry = config.removeOnExpiry ?? false;
+    this.logger = config.logger ?? createLogger(null, null);
 
     const cleanupInterval = config.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS;
     if (cleanupInterval > 0) {
@@ -76,7 +78,7 @@ export class InMemoryApprovalStore implements ApprovalStore {
     };
     this.records.set(record.id, fullRecord);
     
-    logger.info(`[Approval] Created approval: id=${record.id}, category=${record.detection.category}, severity=${record.detection.severity}, timeout=${new Date(record.expiresAt).toISOString()}`);
+    this.logger.info(`[Approval] Created approval: id=${record.id}, category=${record.detection.category}, severity=${record.detection.severity}, timeout=${new Date(record.expiresAt).toISOString()}`);
   }
 
   /**
@@ -86,18 +88,18 @@ export class InMemoryApprovalStore implements ApprovalStore {
   get(id: string): PendingApprovalRecord | undefined {
     const record = this.records.get(id);
     if (!record) {
-      logger.debug(`[Approval] Approval not found: id=${id}`);
+      this.logger.debug(`[Approval] Approval not found: id=${id}`);
       return undefined;
     }
 
     // Check if expired and update status
     if (record.status === 'pending' && Date.now() > record.expiresAt) {
       record.status = 'expired';
-      logger.warn(`[Approval] Found expired approval: id=${id}`);
+      this.logger.warn(`[Approval] Found expired approval: id=${id}`);
       return record;
     }
 
-    logger.debug(`[Approval] Found valid approval: id=${id}, status=${record.status}`);
+    this.logger.debug(`[Approval] Found valid approval: id=${id}, status=${record.status}`);
     return record;
   }
 
@@ -108,13 +110,13 @@ export class InMemoryApprovalStore implements ApprovalStore {
   approve(id: string, approvedBy?: string): boolean {
     const record = this.get(id);
     if (!record) {
-      logger.warn(`[Approval] Cannot approve - approval not found: id=${id}`);
+      this.logger.warn(`[Approval] Cannot approve - approval not found: id=${id}`);
       return false;
     }
 
     // Can only approve pending records
     if (record.status !== 'pending') {
-      logger.warn(`[Approval] Cannot approve - not pending: id=${id}, status=${record.status}`);
+      this.logger.warn(`[Approval] Cannot approve - not pending: id=${id}, status=${record.status}`);
       return false;
     }
 
@@ -122,7 +124,7 @@ export class InMemoryApprovalStore implements ApprovalStore {
     record.approvedBy = approvedBy;
     record.approvedAt = Date.now();
     
-    logger.info(`[Approval] Approved: id=${id}, approvedBy=${approvedBy || 'unknown'}`);
+    this.logger.info(`[Approval] Approved: id=${id}, approvedBy=${approvedBy || 'unknown'}`);
     return true;
   }
 
@@ -133,19 +135,19 @@ export class InMemoryApprovalStore implements ApprovalStore {
   deny(id: string): boolean {
     const record = this.get(id);
     if (!record) {
-      logger.warn(`[Approval] Cannot deny - approval not found: id=${id}`);
+      this.logger.warn(`[Approval] Cannot deny - approval not found: id=${id}`);
       return false;
     }
 
     // Can only deny pending records
     if (record.status !== 'pending') {
-      logger.warn(`[Approval] Cannot deny - not pending: id=${id}, status=${record.status}`);
+      this.logger.warn(`[Approval] Cannot deny - not pending: id=${id}, status=${record.status}`);
       return false;
     }
 
     record.status = 'denied';
     
-    logger.info(`[Approval] Denied: id=${id}`);
+    this.logger.info(`[Approval] Denied: id=${id}`);
     return true;
   }
 
@@ -183,7 +185,7 @@ export class InMemoryApprovalStore implements ApprovalStore {
     }
     
     if (expiredCount > 0 || toRemove.length > 0) {
-      logger.debug(`[Approval] Cleanup: marked ${expiredCount} as expired, removed ${toRemove.length} records`);
+      this.logger.debug(`[Approval] Cleanup: marked ${expiredCount} as expired, removed ${toRemove.length} records`);
     }
   }
 

@@ -9,9 +9,7 @@
 
 import type { ApprovalStore } from './types.js';
 import { getDefaultApprovalStore } from './store.js';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../utils/logger.js';
 
 /** Default parameter name for agent confirmation */
 export const DEFAULT_CONFIRM_PARAMETER = '_clawsec_confirm';
@@ -78,6 +76,8 @@ export interface AgentConfirmHandlerConfig {
   enabled?: boolean;
   /** Custom parameter name for confirmation */
   parameterName?: string;
+  /** Optional logger instance */
+  logger?: Logger;
 }
 
 /**
@@ -87,11 +87,13 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
   private store: ApprovalStore;
   private enabled: boolean;
   private defaultParameterName: string;
+  private logger: Logger;
 
   constructor(config: AgentConfirmHandlerConfig = {}) {
     this.store = config.store ?? getDefaultApprovalStore();
     this.enabled = config.enabled ?? true;
     this.defaultParameterName = config.parameterName ?? DEFAULT_CONFIRM_PARAMETER;
+    this.logger = config.logger ?? createLogger(null, null);
   }
 
   /**
@@ -103,11 +105,11 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
   ): AgentConfirmResult {
     const paramName = parameterName ?? this.defaultParameterName;
 
-    logger.debug(`[AgentConfirm] Checking for confirmation parameter: ${paramName}`);
+    this.logger.debug(`[AgentConfirm] Checking for confirmation parameter: ${paramName}`);
 
     // Check if confirmation is disabled
     if (!this.enabled) {
-      logger.debug(`[AgentConfirm] Agent confirmation is disabled`);
+      this.logger.debug(`[AgentConfirm] Agent confirmation is disabled`);
       return {
         confirmed: false,
         valid: false,
@@ -117,7 +119,7 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
 
     // Check if parameter exists
     if (!(paramName in toolInput)) {
-      logger.debug(`[AgentConfirm] Confirmation parameter not found`);
+      this.logger.debug(`[AgentConfirm] Confirmation parameter not found`);
       return {
         confirmed: false,
         valid: false,
@@ -125,11 +127,11 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
     }
 
     const approvalId = toolInput[paramName];
-    logger.debug(`[AgentConfirm] Confirmation parameter found: ${paramName}=${approvalId}`);
+    this.logger.debug(`[AgentConfirm] Confirmation parameter found: ${paramName}=${approvalId}`);
 
     // Validate the approval ID is a non-empty string
     if (typeof approvalId !== 'string' || approvalId.trim() === '') {
-      logger.warn(`[AgentConfirm] Invalid approval ID format`);
+      this.logger.warn(`[AgentConfirm] Invalid approval ID format`);
       return {
         confirmed: true,
         valid: false,
@@ -143,7 +145,7 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
     const record = this.store.get(trimmedId);
 
     if (!record) {
-      logger.warn(`[AgentConfirm] Approval not found: id=${trimmedId}`);
+      this.logger.warn(`[AgentConfirm] Approval not found: id=${trimmedId}`);
       return {
         confirmed: true,
         approvalId: trimmedId,
@@ -154,7 +156,7 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
 
     // Check the record status
     if (record.status === 'expired') {
-      logger.warn(`[AgentConfirm] Approval expired: id=${trimmedId}`);
+      this.logger.warn(`[AgentConfirm] Approval expired: id=${trimmedId}`);
       return {
         confirmed: true,
         approvalId: trimmedId,
@@ -164,7 +166,7 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
     }
 
     if (record.status === 'approved') {
-      logger.warn(`[AgentConfirm] Approval already used: id=${trimmedId}`);
+      this.logger.warn(`[AgentConfirm] Approval already used: id=${trimmedId}`);
       return {
         confirmed: true,
         approvalId: trimmedId,
@@ -174,7 +176,7 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
     }
 
     if (record.status === 'denied') {
-      logger.warn(`[AgentConfirm] Approval was denied: id=${trimmedId}`);
+      this.logger.warn(`[AgentConfirm] Approval was denied: id=${trimmedId}`);
       return {
         confirmed: true,
         approvalId: trimmedId,
@@ -184,7 +186,7 @@ export class DefaultAgentConfirmHandler implements AgentConfirmHandler {
     }
 
     // Valid pending approval
-    logger.info(`[AgentConfirm] Approval validated: id=${trimmedId}, allowing tool call`);
+    this.logger.info(`[AgentConfirm] Approval validated: id=${trimmedId}, allowing tool call`);
     return {
       confirmed: true,
       approvalId: trimmedId,

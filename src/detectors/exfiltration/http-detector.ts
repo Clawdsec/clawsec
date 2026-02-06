@@ -386,7 +386,7 @@ export function matchHttpExfiltration(text: string): HttpMatchResult {
 export class HttpDetector implements SubDetector {
   private severity: Severity;
 
-  constructor(severity: Severity = 'high') {
+  constructor(severity: Severity = "high", _logger?: any) {
     this.severity = severity;
   }
 
@@ -472,6 +472,6 @@ export class HttpDetector implements SubDetector {
 /**
  * Create an HTTP detector with the given severity
  */
-export function createHttpDetector(severity: Severity = 'high'): HttpDetector {
-  return new HttpDetector(severity);
+export function createHttpDetector(severity: Severity = "high", logger?: any): HttpDetector {
+  return new HttpDetector(severity, logger);
 }

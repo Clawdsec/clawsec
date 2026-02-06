@@ -666,7 +666,8 @@ describe('DefaultActionExecutor', () => {
 
       expect(result.allowed).toBe(true);
       expect(result.logged).toBe(false);
-      expect(mockLogger.calls.debug.length).toBe(1);
+      // Executor now logs: Entry, Routing, handleAllow, Exit = 4 debug calls
+      expect(mockLogger.calls.debug.length).toBe(4);
     });
 
     it('should route block action correctly', async () => {
@@ -723,8 +724,9 @@ describe('DefaultActionExecutor', () => {
 
       expect(result.allowed).toBe(true);
       expect(result.logged).toBe(false);
-      expect(mockLogger.calls.debug.length).toBe(1);
-      expect(mockLogger.calls.debug[0][0]).toContain('disabled');
+      // Executor logs: Entry, "Plugin disabled", Exit = 3 debug calls
+      expect(mockLogger.calls.debug.length).toBe(3);
+      expect(mockLogger.calls.debug[1][0]).toContain('disabled');
     });
 
     it('should handle unknown action type', async () => {

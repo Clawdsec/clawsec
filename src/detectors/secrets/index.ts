@@ -9,9 +9,7 @@ import type {
   SecretsDetector as ISecretsDetector,
   SecretsDetectorConfig,
 } from './types.js';
-import { createLogger } from '../../utils/logger.js';
-
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../../utils/logger.js';
 import { ApiKeyDetector, createApiKeyDetector } from './api-key-detector.js';
 import { TokenDetector, createTokenDetector } from './token-detector.js';
 import { PiiDetector, createPiiDetector } from './pii-detector.js';
@@ -222,20 +220,22 @@ export class SecretsDetectorImpl implements ISecretsDetector {
   private apiKeyDetector: ApiKeyDetector;
   private tokenDetector: TokenDetector;
   private piiDetector: PiiDetector;
+  private logger: Logger;
 
-  constructor(config: SecretsDetectorConfig) {
+  constructor(config: SecretsDetectorConfig, logger?: Logger) {
     this.config = config;
-    this.apiKeyDetector = createApiKeyDetector(config.severity, config.patterns);
-    this.tokenDetector = createTokenDetector(config.severity);
-    this.piiDetector = createPiiDetector(config.severity, false); // Don't include email by default
+    this.logger = logger ?? createLogger(null, null);
+    this.apiKeyDetector = createApiKeyDetector(config.severity, config.patterns, this.logger);
+    this.tokenDetector = createTokenDetector(config.severity, this.logger);
+    this.piiDetector = createPiiDetector(config.severity, false, this.logger); // Don't include email by default
   }
 
   async detect(context: SecretsDetectionContext): Promise<SecretsDetectionResult> {
-    logger.debug(`[SecretsDetector] Starting detection: tool=${context.toolName}`);
+    this.logger.debug(`[SecretsDetector] Starting detection: tool=${context.toolName}`);
 
     // Check if detector is enabled
     if (!this.config.enabled) {
-      logger.debug(`[SecretsDetector] Detector disabled`);
+      this.logger.debug(`[SecretsDetector] Detector disabled`);
       return noDetection(this.config.severity);
     }
 
@@ -243,41 +243,41 @@ export class SecretsDetectorImpl implements ISecretsDetector {
 
     // Extract text content from tool input
     const inputContent = extractTextContent(context.toolInput);
-    logger.debug(`[SecretsDetector] Scanning ${inputContent.size} text fields in tool input`);
+    this.logger.debug(`[SecretsDetector] Scanning ${inputContent.size} text fields in tool input`);
 
     for (const [location, text] of inputContent) {
-      logger.debug(`[SecretsDetector] Running API key detector on ${location}`);
+      this.logger.debug(`[SecretsDetector] Running API key detector on ${location}`);
       const apiKeyResults = this.apiKeyDetector.scan(text, `input.${location}`);
       if (apiKeyResults.length > 0) {
-        logger.info(`[SecretsDetector] API key detection: count=${apiKeyResults.length}, location=${location}`);
+        this.logger.info(`[SecretsDetector] API key detection: count=${apiKeyResults.length}, location=${location}`);
       }
       allResults.push(...apiKeyResults);
 
-      logger.debug(`[SecretsDetector] Running token detector on ${location}`);
+      this.logger.debug(`[SecretsDetector] Running token detector on ${location}`);
       const tokenResults = this.tokenDetector.scan(text, `input.${location}`);
       if (tokenResults.length > 0) {
-        logger.info(`[SecretsDetector] Token detection: count=${tokenResults.length}, location=${location}`);
+        this.logger.info(`[SecretsDetector] Token detection: count=${tokenResults.length}, location=${location}`);
       }
       allResults.push(...tokenResults);
 
-      logger.debug(`[SecretsDetector] Running PII detector on ${location}`);
+      this.logger.debug(`[SecretsDetector] Running PII detector on ${location}`);
       const piiResults = this.piiDetector.scan(text, `input.${location}`);
       if (piiResults.length > 0) {
-        logger.info(`[SecretsDetector] PII detection: count=${piiResults.length}, location=${location}`);
+        this.logger.info(`[SecretsDetector] PII detection: count=${piiResults.length}, location=${location}`);
       }
       allResults.push(...piiResults);
 
-      logger.debug(`[SecretsDetector] Running credential scanner on ${location}`);
+      this.logger.debug(`[SecretsDetector] Running credential scanner on ${location}`);
       const credResults = scanCredentials(text, `input.${location}`, this.config.severity);
       if (credResults.length > 0) {
-        logger.info(`[SecretsDetector] Credential detection: count=${credResults.length}, location=${location}`);
+        this.logger.info(`[SecretsDetector] Credential detection: count=${credResults.length}, location=${location}`);
       }
       allResults.push(...credResults);
     }
 
     // Also scan tool output if provided
     if (context.toolOutput) {
-      logger.debug(`[SecretsDetector] Scanning tool output`);
+      this.logger.debug(`[SecretsDetector] Scanning tool output`);
       allResults.push(...this.apiKeyDetector.scan(context.toolOutput, 'output'));
       allResults.push(...this.tokenDetector.scan(context.toolOutput, 'output'));
       allResults.push(...this.piiDetector.scan(context.toolOutput, 'output'));
@@ -286,14 +286,14 @@ export class SecretsDetectorImpl implements ISecretsDetector {
 
     const detections = allResults.filter((r) => r.detected);
     if (detections.length === 0) {
-      logger.debug(`[SecretsDetector] No secrets detected`);
+      this.logger.debug(`[SecretsDetector] No secrets detected`);
     } else {
-      logger.debug(`[SecretsDetector] Combining ${detections.length} secret detections`);
+      this.logger.debug(`[SecretsDetector] Combining ${detections.length} secret detections`);
     }
 
     // Combine and return results
     const combined = combineResults(allResults, this.config.severity);
-    logger.debug(`[SecretsDetector] Detection complete: detected=${combined.detected}, confidence=${combined.confidence}`);
+    this.logger.debug(`[SecretsDetector] Detection complete: detected=${combined.detected}, confidence=${combined.confidence}`);
     
     return combined;
   }
@@ -346,7 +346,7 @@ export class SecretsDetectorImpl implements ISecretsDetector {
 /**
  * Create a secrets detector from SecretsRule configuration
  */
-export function createSecretsDetector(rule: SecretsRule): SecretsDetectorImpl {
+export function createSecretsDetector(rule: SecretsRule, logger?: Logger): SecretsDetectorImpl {
   const config: SecretsDetectorConfig = {
     enabled: rule.enabled,
     severity: rule.severity,
@@ -354,7 +354,7 @@ export function createSecretsDetector(rule: SecretsRule): SecretsDetectorImpl {
     patterns: rule.patterns,
   };
 
-  return new SecretsDetectorImpl(config);
+  return new SecretsDetectorImpl(config, logger);
 }
 
 /**

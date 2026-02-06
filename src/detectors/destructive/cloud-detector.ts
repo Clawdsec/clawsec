@@ -10,10 +10,7 @@ import type {
   SubDetector,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
-import { createLogger } from '../../utils/logger.js';
-
-// Create a logger that falls back to console for detector operations
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * AWS destructive command patterns
@@ -495,10 +492,12 @@ export function matchCloudCommand(command: string): CloudMatchResult {
 export class CloudDetector implements SubDetector {
   private severity: Severity;
   private customPatterns: string[];
+  private logger: Logger;
 
-  constructor(severity: Severity = 'critical', customPatterns?: string[]) {
+  constructor(severity: Severity = 'critical', customPatterns: string[] = [], logger?: Logger) {
     this.severity = severity;
-    this.customPatterns = customPatterns || [];
+    this.customPatterns = customPatterns;
+    this.logger = logger ?? createLogger(null, null);
   }
 
   /**
@@ -561,13 +560,13 @@ export class CloudDetector implements SubDetector {
       return { matched: false, confidence: 0 };
     }
 
-    logger.debug(`[CloudDetector] Checking ${this.customPatterns.length} custom patterns`);
+    this.logger.debug(`[CloudDetector] Checking ${this.customPatterns.length} custom patterns`);
 
     for (const pattern of this.customPatterns) {
       try {
         const regex = new RegExp(pattern, 'i');
         if (regex.test(command)) {
-          logger.info(`[CloudDetector] Custom pattern matched: ${pattern}`);
+          this.logger.info(`[CloudDetector] Custom pattern matched: ${pattern}`);
           return {
             matched: true,
             command,
@@ -577,7 +576,7 @@ export class CloudDetector implements SubDetector {
           };
         }
       } catch (error) {
-        logger.warn(`[CloudDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.warn(`[CloudDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
     }
@@ -636,6 +635,10 @@ export class CloudDetector implements SubDetector {
 /**
  * Create a cloud detector with the given severity and custom patterns
  */
-export function createCloudDetector(severity: Severity = 'critical', customPatterns?: string[]): CloudDetector {
-  return new CloudDetector(severity, customPatterns);
+export function createCloudDetector(
+  severity: Severity = 'critical',
+  customPatterns: string[] = [],
+  logger?: Logger
+): CloudDetector {
+  return new CloudDetector(severity, customPatterns, logger);
 }

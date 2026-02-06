@@ -10,10 +10,7 @@ import type {
   ApiKeyProvider,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
-import { createLogger } from '../../utils/logger.js';
-
-// Create a logger that falls back to console for detector operations
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * API key pattern definitions
@@ -301,10 +298,12 @@ export function matchApiKeys(text: string): ApiKeyMatch[] {
 export class ApiKeyDetector implements SecretSubDetector {
   private severity: Severity;
   private customPatterns: string[];
+  private logger: Logger;
 
-  constructor(severity: Severity, customPatterns?: string[]) {
+  constructor(severity: Severity, customPatterns?: string[], logger?: Logger) {
     this.severity = severity;
     this.customPatterns = customPatterns || [];
+    this.logger = logger ?? createLogger(null, null);
   }
 
   scan(text: string, location: string): SecretsDetectionResult[] {
@@ -312,14 +311,14 @@ export class ApiKeyDetector implements SecretSubDetector {
 
     // Add custom pattern matches
     if (this.customPatterns.length > 0) {
-      logger.debug(`[ApiKeyDetector] Checking ${this.customPatterns.length} custom patterns`);
+      this.logger.debug(`[ApiKeyDetector] Checking ${this.customPatterns.length} custom patterns`);
 
       for (const pattern of this.customPatterns) {
         try {
           const regex = new RegExp(pattern, 'gi');
           let match;
           while ((match = regex.exec(text)) !== null) {
-            logger.info(`[ApiKeyDetector] Custom pattern matched: ${pattern}`);
+            this.logger.info(`[ApiKeyDetector] Custom pattern matched: ${pattern}`);
             matches.push({
               matched: true,
               value: match[0],
@@ -329,7 +328,7 @@ export class ApiKeyDetector implements SecretSubDetector {
             });
           }
         } catch (error) {
-          logger.warn(`[ApiKeyDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
+          this.logger.warn(`[ApiKeyDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
           continue;
         }
       }
@@ -354,6 +353,6 @@ export class ApiKeyDetector implements SecretSubDetector {
 /**
  * Create an API key detector with custom patterns
  */
-export function createApiKeyDetector(severity: Severity, customPatterns?: string[]): ApiKeyDetector {
-  return new ApiKeyDetector(severity, customPatterns);
+export function createApiKeyDetector(severity: Severity, customPatterns?: string[], logger?: Logger): ApiKeyDetector {
+  return new ApiKeyDetector(severity, customPatterns, logger);
 }

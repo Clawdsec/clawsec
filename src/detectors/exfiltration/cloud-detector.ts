@@ -370,7 +370,7 @@ export function matchCloudUpload(text: string): CloudUploadMatchResult {
 export class CloudUploadDetector implements SubDetector {
   private severity: Severity;
 
-  constructor(severity: Severity = 'high') {
+  constructor(severity: Severity = "high", _logger?: any) {
     this.severity = severity;
   }
 
@@ -466,6 +466,6 @@ export class CloudUploadDetector implements SubDetector {
 /**
  * Create a cloud upload detector with the given severity
  */
-export function createCloudUploadDetector(severity: Severity = 'high'): CloudUploadDetector {
-  return new CloudUploadDetector(severity);
+export function createCloudUploadDetector(severity: Severity = "high", logger?: any): CloudUploadDetector {
+  return new CloudUploadDetector(severity, logger);
 }

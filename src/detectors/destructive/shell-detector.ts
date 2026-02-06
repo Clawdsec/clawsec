@@ -10,10 +10,7 @@ import type {
   SubDetector,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
-import { createLogger } from '../../utils/logger.js';
-
-// Create a logger that falls back to console for detector operations
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../../utils/logger.js';
 
 /**
  * Dangerous paths that should never be deleted recursively
@@ -261,10 +258,12 @@ export function matchShellCommand(command: string): ShellMatchResult {
 export class ShellDetector implements SubDetector {
   private severity: Severity;
   private customPatterns: string[];
+  private logger: Logger;
 
-  constructor(severity: Severity = 'critical', customPatterns?: string[]) {
+  constructor(severity: Severity = 'critical', customPatterns: string[] = [], logger?: Logger) {
     this.severity = severity;
-    this.customPatterns = customPatterns || [];
+    this.customPatterns = customPatterns;
+    this.logger = logger ?? createLogger(null, null);
   }
 
   /**
@@ -333,13 +332,13 @@ export class ShellDetector implements SubDetector {
       return { matched: false, confidence: 0 };
     }
 
-    logger.debug(`[ShellDetector] Checking ${this.customPatterns.length} custom patterns`);
+    this.logger.debug(`[ShellDetector] Checking ${this.customPatterns.length} custom patterns`);
 
     for (const pattern of this.customPatterns) {
       try {
         const regex = new RegExp(pattern, 'i');
         if (regex.test(command)) {
-          logger.info(`[ShellDetector] Custom pattern matched: ${pattern}`);
+          this.logger.info(`[ShellDetector] Custom pattern matched: ${pattern}`);
           return {
             matched: true,
             command,
@@ -349,7 +348,7 @@ export class ShellDetector implements SubDetector {
           };
         }
       } catch (error) {
-        logger.warn(`[ShellDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.warn(`[ShellDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
     }
@@ -393,6 +392,10 @@ export class ShellDetector implements SubDetector {
 /**
  * Create a shell detector with the given severity and custom patterns
  */
-export function createShellDetector(severity: Severity = 'critical', customPatterns?: string[]): ShellDetector {
-  return new ShellDetector(severity, customPatterns);
+export function createShellDetector(
+  severity: Severity = 'critical',
+  customPatterns: string[] = [],
+  logger?: Logger
+): ShellDetector {
+  return new ShellDetector(severity, customPatterns, logger);
 }

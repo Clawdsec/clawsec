@@ -466,7 +466,7 @@ export function matchNetworkExfiltration(text: string): NetworkMatchResult {
 export class NetworkDetector implements SubDetector {
   private severity: Severity;
 
-  constructor(severity: Severity = 'high') {
+  constructor(severity: Severity = "high", _logger?: any) {
     this.severity = severity;
   }
 
@@ -556,6 +556,6 @@ export class NetworkDetector implements SubDetector {
 /**
  * Create a network detector with the given severity
  */
-export function createNetworkDetector(severity: Severity = 'high'): NetworkDetector {
-  return new NetworkDetector(severity);
+export function createNetworkDetector(severity: Severity = "high", logger?: any): NetworkDetector {
+  return new NetworkDetector(severity, logger);
 }

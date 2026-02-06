@@ -383,9 +383,9 @@ export function activate(api: OpenClawPluginAPI): () => void {
   }
 
   // Create handlers with loaded config
-  const beforeToolCallHandlerWithConfig = createBeforeToolCallHandler(state.clawsecConfig);
-  const beforeAgentStartHandlerWithConfig = createBeforeAgentStartHandler(state.clawsecConfig);
-  const toolResultPersistHandlerWithConfig = createToolResultPersistHandler(state.clawsecConfig);
+  const beforeToolCallHandlerWithConfig = createBeforeToolCallHandler(state.clawsecConfig, undefined, state.logger);
+  const beforeAgentStartHandlerWithConfig = createBeforeAgentStartHandler(state.clawsecConfig, undefined, state.logger);
+  const toolResultPersistHandlerWithConfig = createToolResultPersistHandler(state.clawsecConfig, undefined, state.logger);
 
   // Store handler references
   state.handlers.beforeToolCall = beforeToolCallHandlerWithConfig;
