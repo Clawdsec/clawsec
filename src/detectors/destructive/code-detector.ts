@@ -10,6 +10,10 @@ import type {
   SubDetector,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
+import { createLogger } from '../../utils/logger.js';
+
+// Create a logger that falls back to console for detector operations
+const logger = createLogger(null, null);
 
 /**
  * Python destructive patterns
@@ -558,10 +562,17 @@ export class CodeDetector implements SubDetector {
    * Match custom patterns against code
    */
   private matchCustomPatterns(code: string): CodeMatchResult {
+    if (this.customPatterns.length === 0) {
+      return { matched: false, confidence: 0 };
+    }
+
+    logger.debug(`[CodeDetector] Checking ${this.customPatterns.length} custom patterns`);
+
     for (const pattern of this.customPatterns) {
       try {
         const regex = new RegExp(pattern, 'i');
         if (regex.test(code)) {
+          logger.info(`[CodeDetector] Custom pattern matched: ${pattern}`);
           return {
             matched: true,
             code,
@@ -570,8 +581,8 @@ export class CodeDetector implements SubDetector {
             confidence: 0.85,
           };
         }
-      } catch {
-        // Invalid regex, skip
+      } catch (error) {
+        logger.warn(`[CodeDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
     }

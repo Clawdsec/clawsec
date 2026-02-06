@@ -10,6 +10,10 @@ import type {
   ApiKeyProvider,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
+import { createLogger } from '../../utils/logger.js';
+
+// Create a logger that falls back to console for detector operations
+const logger = createLogger(null, null);
 
 /**
  * API key pattern definitions
@@ -307,21 +311,27 @@ export class ApiKeyDetector implements SecretSubDetector {
     const matches = matchApiKeys(text);
 
     // Add custom pattern matches
-    for (const pattern of this.customPatterns) {
-      try {
-        const regex = new RegExp(pattern, 'gi');
-        let match;
-        while ((match = regex.exec(text)) !== null) {
-          matches.push({
-            matched: true,
-            value: match[0],
-            provider: 'custom',
-            redactedValue: '[REDACTED:custom]',
-            confidence: 0.85,
-          });
+    if (this.customPatterns.length > 0) {
+      logger.debug(`[ApiKeyDetector] Checking ${this.customPatterns.length} custom patterns`);
+
+      for (const pattern of this.customPatterns) {
+        try {
+          const regex = new RegExp(pattern, 'gi');
+          let match;
+          while ((match = regex.exec(text)) !== null) {
+            logger.info(`[ApiKeyDetector] Custom pattern matched: ${pattern}`);
+            matches.push({
+              matched: true,
+              value: match[0],
+              provider: 'custom',
+              redactedValue: '[REDACTED:custom]',
+              confidence: 0.85,
+            });
+          }
+        } catch (error) {
+          logger.warn(`[ApiKeyDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
+          continue;
         }
-      } catch {
-        continue;
       }
     }
     

@@ -11,6 +11,10 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import type { PartialClawsecConfig } from './schema.js';
 import { ConfigLoadError } from './loader.js';
+import { createLogger } from '../utils/logger.js';
+
+// Create a logger that falls back to console for template loading (happens before plugin activation)
+const logger = createLogger(null, null);
 
 /**
  * Resolves builtin template names to file paths
@@ -31,22 +35,29 @@ export class TemplateResolver {
    * "builtin/aws-security" → "/path/to/rules/builtin/aws-security.yaml"
    */
   resolveTemplatePath(templateName: string): string {
+    logger.debug(`[Template] Resolving template: ${templateName}`);
+
     if (templateName.startsWith('builtin/')) {
       const name = templateName.replace('builtin/', '');
       const filePath = path.join(this.builtinPath, `${name}.yaml`);
 
+      logger.debug(`[Template] Checking builtin path: ${filePath}`);
+
       // Check if file exists
       if (!fs.existsSync(filePath)) {
+        logger.error(`[Template] Template not found: ${templateName} at ${filePath}`);
         throw new ConfigLoadError(
           `Built-in template not found: ${templateName}`,
           filePath
         );
       }
 
+      logger.info(`[Template] Loaded builtin template: ${templateName}`);
       return filePath;
     }
 
     // Assume it's a file path
+    logger.debug(`[Template] Resolving custom template path: ${templateName}`);
     return path.resolve(templateName);
   }
 
@@ -54,11 +65,14 @@ export class TemplateResolver {
    * Load a single template file
    */
   loadTemplate(templateName: string): PartialClawsecConfig {
+    logger.debug(`[Template] Loading template: ${templateName}`);
     const filePath = this.resolveTemplatePath(templateName);
 
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
       const parsed = parseYaml(content) as PartialClawsecConfig;
+
+      logger.debug(`[Template] Parsed template ${templateName}, removing metadata fields`);
 
       // Remove template metadata fields (name, description, version)
       // These are for documentation only
@@ -67,8 +81,10 @@ export class TemplateResolver {
         delete (parsed as Record<string, unknown>).description;
       }
 
+      logger.info(`[Template] Successfully loaded template: ${templateName}`);
       return parsed || {};
     } catch (error) {
+      logger.error(`[Template] Failed to load template ${templateName}: ${error instanceof Error ? error.message : String(error)}`);
       throw new ConfigLoadError(
         `Failed to load template ${templateName}: ${error instanceof Error ? error.message : String(error)}`,
         filePath,
@@ -134,13 +150,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * Load and merge multiple templates in order
  */
 export function loadTemplates(templateNames: string[]): PartialClawsecConfig {
+  logger.info(`[Template] Loading ${templateNames.length} templates: ${templateNames.join(', ')}`);
   const resolver = new TemplateResolver();
   let merged: PartialClawsecConfig = {};
 
   for (const templateName of templateNames) {
     const template = resolver.loadTemplate(templateName);
     merged = deepMergeConfigs(merged, template);
+    logger.debug(`[Template] Merged template ${templateName} into config`);
   }
 
+  logger.info(`[Template] All templates loaded and merged successfully`);
   return merged;
 }

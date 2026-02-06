@@ -10,6 +10,10 @@ import type {
   SubDetector,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
+import { createLogger } from '../../utils/logger.js';
+
+// Create a logger that falls back to console for detector operations
+const logger = createLogger(null, null);
 
 /**
  * AWS destructive command patterns
@@ -553,10 +557,17 @@ export class CloudDetector implements SubDetector {
    * Match custom patterns against command
    */
   private matchCustomPatterns(command: string): CloudMatchResult {
+    if (this.customPatterns.length === 0) {
+      return { matched: false, confidence: 0 };
+    }
+
+    logger.debug(`[CloudDetector] Checking ${this.customPatterns.length} custom patterns`);
+
     for (const pattern of this.customPatterns) {
       try {
         const regex = new RegExp(pattern, 'i');
         if (regex.test(command)) {
+          logger.info(`[CloudDetector] Custom pattern matched: ${pattern}`);
           return {
             matched: true,
             command,
@@ -565,8 +576,8 @@ export class CloudDetector implements SubDetector {
             confidence: 0.85,
           };
         }
-      } catch {
-        // Invalid regex, skip
+      } catch (error) {
+        logger.warn(`[CloudDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
     }

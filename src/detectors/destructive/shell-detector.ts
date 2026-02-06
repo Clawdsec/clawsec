@@ -10,6 +10,10 @@ import type {
   SubDetector,
 } from './types.js';
 import type { Severity } from '../../config/index.js';
+import { createLogger } from '../../utils/logger.js';
+
+// Create a logger that falls back to console for detector operations
+const logger = createLogger(null, null);
 
 /**
  * Dangerous paths that should never be deleted recursively
@@ -325,10 +329,17 @@ export class ShellDetector implements SubDetector {
    * Match custom patterns against command
    */
   private matchCustomPatterns(command: string): ShellMatchResult {
+    if (this.customPatterns.length === 0) {
+      return { matched: false, confidence: 0 };
+    }
+
+    logger.debug(`[ShellDetector] Checking ${this.customPatterns.length} custom patterns`);
+
     for (const pattern of this.customPatterns) {
       try {
         const regex = new RegExp(pattern, 'i');
         if (regex.test(command)) {
+          logger.info(`[ShellDetector] Custom pattern matched: ${pattern}`);
           return {
             matched: true,
             command,
@@ -337,8 +348,8 @@ export class ShellDetector implements SubDetector {
             riskDescription: `Custom shell pattern matched: ${pattern}`,
           };
         }
-      } catch {
-        // Invalid regex, skip
+      } catch (error) {
+        logger.warn(`[ShellDetector] Invalid regex pattern skipped: "${pattern}" - ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
     }
