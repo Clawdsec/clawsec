@@ -126,17 +126,17 @@ export class DestructiveDetectorImpl implements IDestructiveDetector {
     // Initialize sub-detectors based on config
     this.shellDetector =
       config.shell?.enabled !== false
-        ? createShellDetector(config.severity)
+        ? createShellDetector(config.severity, config.shell?.patterns)
         : null;
 
     this.cloudDetector =
       config.cloud?.enabled !== false
-        ? createCloudDetector(config.severity)
+        ? createCloudDetector(config.severity, config.cloud?.patterns)
         : null;
 
     this.codeDetector =
       config.code?.enabled !== false
-        ? createCodeDetector(config.severity)
+        ? createCodeDetector(config.severity, config.code?.patterns)
         : null;
   }
 

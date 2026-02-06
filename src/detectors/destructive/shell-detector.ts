@@ -256,9 +256,11 @@ export function matchShellCommand(command: string): ShellMatchResult {
  */
 export class ShellDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: string[];
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = 'critical', customPatterns?: string[]) {
     this.severity = severity;
+    this.customPatterns = customPatterns || [];
   }
 
   /**
@@ -319,14 +321,44 @@ export class ShellDetector implements SubDetector {
     return null;
   }
 
+  /**
+   * Match custom patterns against command
+   */
+  private matchCustomPatterns(command: string): ShellMatchResult {
+    for (const pattern of this.customPatterns) {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(command)) {
+          return {
+            matched: true,
+            command,
+            operation: 'custom-shell-command',
+            confidence: 0.85,
+            riskDescription: `Custom shell pattern matched: ${pattern}`,
+          };
+        }
+      } catch {
+        // Invalid regex, skip
+        continue;
+      }
+    }
+    return { matched: false, confidence: 0 };
+  }
+
   detect(context: DetectionContext): DestructiveDetectionResult | null {
     const command = this.extractCommand(context);
     if (!command) {
       return null;
     }
 
-    const result = matchShellCommand(command);
-    
+    // Try built-in patterns first
+    let result = matchShellCommand(command);
+
+    // If no built-in match, try custom patterns
+    if (!result.matched && this.customPatterns.length > 0) {
+      result = this.matchCustomPatterns(command);
+    }
+
     if (!result.matched) {
       return null;
     }
@@ -348,8 +380,8 @@ export class ShellDetector implements SubDetector {
 }
 
 /**
- * Create a shell detector with the given severity
+ * Create a shell detector with the given severity and custom patterns
  */
-export function createShellDetector(severity: Severity = 'critical'): ShellDetector {
-  return new ShellDetector(severity);
+export function createShellDetector(severity: Severity = 'critical', customPatterns?: string[]): ShellDetector {
+  return new ShellDetector(severity, customPatterns);
 }

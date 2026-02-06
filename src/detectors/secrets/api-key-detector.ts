@@ -296,16 +296,34 @@ export function matchApiKeys(text: string): ApiKeyMatch[] {
  */
 export class ApiKeyDetector implements SecretSubDetector {
   private severity: Severity;
+  private customPatterns: string[];
 
-  constructor(severity: Severity) {
+  constructor(severity: Severity, customPatterns?: string[]) {
     this.severity = severity;
+    this.customPatterns = customPatterns || [];
   }
 
-  /**
-   * Scan text for API keys
-   */
   scan(text: string, location: string): SecretsDetectionResult[] {
     const matches = matchApiKeys(text);
+
+    // Add custom pattern matches
+    for (const pattern of this.customPatterns) {
+      try {
+        const regex = new RegExp(pattern, 'gi');
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+          matches.push({
+            matched: true,
+            value: match[0],
+            provider: 'custom',
+            redactedValue: '[REDACTED:custom]',
+            confidence: 0.85,
+          });
+        }
+      } catch {
+        continue;
+      }
+    }
     
     return matches.map((match) => ({
       detected: true,
@@ -324,8 +342,8 @@ export class ApiKeyDetector implements SecretSubDetector {
 }
 
 /**
- * Create an API key detector
+ * Create an API key detector with custom patterns
  */
-export function createApiKeyDetector(severity: Severity): ApiKeyDetector {
-  return new ApiKeyDetector(severity);
+export function createApiKeyDetector(severity: Severity, customPatterns?: string[]): ApiKeyDetector {
+  return new ApiKeyDetector(severity, customPatterns);
 }

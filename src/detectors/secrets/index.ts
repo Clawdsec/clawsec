@@ -222,7 +222,7 @@ export class SecretsDetectorImpl implements ISecretsDetector {
 
   constructor(config: SecretsDetectorConfig) {
     this.config = config;
-    this.apiKeyDetector = createApiKeyDetector(config.severity);
+    this.apiKeyDetector = createApiKeyDetector(config.severity, config.patterns);
     this.tokenDetector = createTokenDetector(config.severity);
     this.piiDetector = createPiiDetector(config.severity, false); // Don't include email by default
   }
@@ -309,6 +309,7 @@ export function createSecretsDetector(rule: SecretsRule): SecretsDetectorImpl {
     enabled: rule.enabled,
     severity: rule.severity,
     action: rule.action,
+    patterns: rule.patterns,
   };
 
   return new SecretsDetectorImpl(config);

@@ -25,7 +25,7 @@ export type SecretType = 'api-key' | 'token' | 'credential' | 'pii';
 /**
  * Provider of the detected API key
  */
-export type ApiKeyProvider = 
+export type ApiKeyProvider =
   | 'openai'
   | 'aws'
   | 'github'
@@ -33,7 +33,8 @@ export type ApiKeyProvider =
   | 'slack'
   | 'google'
   | 'anthropic'
-  | 'generic';
+  | 'generic'
+  | 'custom';
 
 /**
  * Type of token detected
@@ -84,6 +85,8 @@ export interface SecretsDetectorConfig {
   severity: Severity;
   /** Action to take when secret is detected */
   action: Action;
+  /** Custom regex patterns for secrets detection */
+  patterns?: string[];
 }
 
 /**

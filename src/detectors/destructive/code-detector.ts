@@ -498,9 +498,11 @@ export function matchCodePattern(code: string): CodeMatchResult {
  */
 export class CodeDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: string[];
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = 'critical', customPatterns?: string[]) {
     this.severity = severity;
+    this.customPatterns = customPatterns || [];
   }
 
   /**
@@ -552,14 +554,44 @@ export class CodeDetector implements SubDetector {
     return null;
   }
 
+  /**
+   * Match custom patterns against code
+   */
+  private matchCustomPatterns(code: string): CodeMatchResult {
+    for (const pattern of this.customPatterns) {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(code)) {
+          return {
+            matched: true,
+            code,
+            language: 'custom',
+            operation: 'custom-code-operation',
+            confidence: 0.85,
+          };
+        }
+      } catch {
+        // Invalid regex, skip
+        continue;
+      }
+    }
+    return { matched: false, confidence: 0 };
+  }
+
   detect(context: DetectionContext): DestructiveDetectionResult | null {
     const code = this.extractCode(context);
     if (!code) {
       return null;
     }
 
-    const result = matchCodePattern(code);
-    
+    // Try built-in patterns first
+    let result = matchCodePattern(code);
+
+    // If no built-in match, try custom patterns
+    if (!result.matched && this.customPatterns.length > 0) {
+      result = this.matchCustomPatterns(code);
+    }
+
     if (!result.matched) {
       return null;
     }
@@ -596,6 +628,6 @@ export class CodeDetector implements SubDetector {
 /**
  * Create a code detector with the given severity
  */
-export function createCodeDetector(severity: Severity = 'critical'): CodeDetector {
-  return new CodeDetector(severity);
+export function createCodeDetector(severity: Severity = 'critical', customPatterns?: string[]): CodeDetector {
+  return new CodeDetector(severity, customPatterns);
 }

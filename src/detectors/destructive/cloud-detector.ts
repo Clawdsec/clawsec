@@ -490,9 +490,11 @@ export function matchCloudCommand(command: string): CloudMatchResult {
  */
 export class CloudDetector implements SubDetector {
   private severity: Severity;
+  private customPatterns: string[];
 
-  constructor(severity: Severity = 'critical') {
+  constructor(severity: Severity = 'critical', customPatterns?: string[]) {
     this.severity = severity;
+    this.customPatterns = customPatterns || [];
   }
 
   /**
@@ -547,14 +549,44 @@ export class CloudDetector implements SubDetector {
     return null;
   }
 
+  /**
+   * Match custom patterns against command
+   */
+  private matchCustomPatterns(command: string): CloudMatchResult {
+    for (const pattern of this.customPatterns) {
+      try {
+        const regex = new RegExp(pattern, 'i');
+        if (regex.test(command)) {
+          return {
+            matched: true,
+            command,
+            provider: 'custom',
+            operation: 'custom-cloud-operation',
+            confidence: 0.85,
+          };
+        }
+      } catch {
+        // Invalid regex, skip
+        continue;
+      }
+    }
+    return { matched: false, confidence: 0 };
+  }
+
   detect(context: DetectionContext): DestructiveDetectionResult | null {
     const command = this.extractCommand(context);
     if (!command) {
       return null;
     }
 
-    const result = matchCloudCommand(command);
-    
+    // Try built-in patterns first
+    let result = matchCloudCommand(command);
+
+    // If no built-in match, try custom patterns
+    if (!result.matched && this.customPatterns.length > 0) {
+      result = this.matchCustomPatterns(command);
+    }
+
     if (!result.matched) {
       return null;
     }
@@ -569,6 +601,7 @@ export class CloudDetector implements SubDetector {
       kubernetes: 'Kubernetes',
       terraform: 'Terraform/IaC',
       git: 'Git',
+      custom: 'Custom Cloud',
     };
 
     const providerDesc = providerDescriptions[result.provider || 'unknown'] || result.provider;
@@ -590,8 +623,8 @@ export class CloudDetector implements SubDetector {
 }
 
 /**
- * Create a cloud detector with the given severity
+ * Create a cloud detector with the given severity and custom patterns
  */
-export function createCloudDetector(severity: Severity = 'critical'): CloudDetector {
-  return new CloudDetector(severity);
+export function createCloudDetector(severity: Severity = 'critical', customPatterns?: string[]): CloudDetector {
+  return new CloudDetector(severity, customPatterns);
 }
