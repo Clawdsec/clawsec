@@ -9,6 +9,7 @@ import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { ClawsecConfigSchema, type ClawsecConfig, type PartialClawsecConfig } from './schema.js';
 import { getDefaultConfig } from './defaults.js';
+import { loadTemplates, deepMergeConfigs } from './template-loader.js';
 
 // =============================================================================
 // ERROR TYPES
@@ -180,7 +181,7 @@ export function findConfigFile(startDir: string = process.cwd()): string | null 
 }
 
 /**
- * Loads configuration from a YAML file.
+ * Loads configuration from a YAML file with template inheritance support.
  *
  * If no path is provided, searches for config file in standard locations.
  * If no config file is found, returns default configuration.
@@ -191,53 +192,70 @@ export function findConfigFile(startDir: string = process.cwd()): string | null 
  * @throws ConfigValidationError if configuration is invalid
  */
 export function loadConfig(configPath?: string): ClawsecConfig {
-  // If explicit path provided, load from that path
-  if (configPath) {
-    const resolvedPath = path.resolve(configPath);
-    const content = readYamlFile(resolvedPath);
+  // Determine which config file to use
+  const foundPath = configPath ? path.resolve(configPath) : findConfigFile();
 
-    // Handle empty file case
-    if (content === null || content === undefined) {
-      return getDefaultConfig();
-    }
-
-    return validateConfig(content);
+  if (!foundPath) {
+    // No config file found, return defaults
+    return getDefaultConfig();
   }
 
-  // Try to find config file
-  const foundPath = findConfigFile();
+  const userConfig = readYamlFile(foundPath) as PartialClawsecConfig;
 
-  if (foundPath) {
-    const content = readYamlFile(foundPath);
-
-    // Handle empty file case
-    if (content === null || content === undefined) {
-      return getDefaultConfig();
-    }
-
-    return validateConfig(content);
+  // Handle empty file case
+  if (userConfig === null || userConfig === undefined) {
+    return getDefaultConfig();
   }
 
-  // No config file found, return defaults
-  return getDefaultConfig();
+  // Check for extends field
+  if (userConfig.extends && Array.isArray(userConfig.extends) && userConfig.extends.length > 0) {
+    // Load all templates
+    const templateConfig = loadTemplates(userConfig.extends);
+
+    // Merge: templates first, then user config (user overrides templates)
+    const merged = deepMergeConfigs(templateConfig, userConfig);
+
+    // Remove extends field before validation (not part of final schema)
+    delete (merged as Record<string, unknown>).extends;
+
+    return validateConfig(merged);
+  }
+
+  // No extends, validate as-is
+  return validateConfig(userConfig);
 }
 
 /**
- * Loads configuration from a YAML string.
+ * Loads configuration from a YAML string with template inheritance support.
  *
  * @param yamlContent - YAML string to parse
  * @returns Validated configuration
  * @throws ConfigValidationError if configuration is invalid
  */
 export function loadConfigFromString(yamlContent: string): ClawsecConfig {
-  const content = parseYaml(yamlContent);
+  const userConfig = parseYaml(yamlContent) as PartialClawsecConfig;
 
   // Handle empty content
-  if (content === null || content === undefined) {
+  if (userConfig === null || userConfig === undefined) {
     return getDefaultConfig();
   }
 
-  return validateConfig(content);
+  // Check for extends field
+  if (userConfig.extends && Array.isArray(userConfig.extends) && userConfig.extends.length > 0) {
+    // Load all templates
+    const templateConfig = loadTemplates(userConfig.extends);
+
+    // Merge: templates first, then user config (user overrides templates)
+    const merged = deepMergeConfigs(templateConfig, userConfig);
+
+    // Remove extends field before validation (not part of final schema)
+    delete (merged as Record<string, unknown>).extends;
+
+    return validateConfig(merged);
+  }
+
+  // No extends, validate as-is
+  return validateConfig(userConfig);
 }
 
 /**
