@@ -14,6 +14,14 @@ export const PLUGIN_NAME = 'Clawsec Security Plugin';
 // Logger utility for safe API logging with fallback
 import { createLogger, createNoOpLogger, type Logger } from './utils/logger.js';
 
+// Config loader
+import { loadConfig } from './config/loader.js';
+
+// Hook handler factories
+import { createBeforeToolCallHandler } from './hooks/before-tool-call/handler.js';
+import { createBeforeAgentStartHandler } from './hooks/before-agent-start/handler.js';
+import { createToolResultPersistHandler } from './hooks/tool-result-persist/handler.js';
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -204,9 +212,12 @@ export interface ApprovalResponse {
 // PLUGIN STATE
 // =============================================================================
 
+import type { ClawsecConfig } from './config/schema.js';
+
 interface PluginState {
   api: OpenClawPluginAPI | null;
   config: PluginConfig | null;
+  clawsecConfig: ClawsecConfig | null;
   initialized: boolean;
   logger: Logger;
   handlers: {
@@ -219,6 +230,7 @@ interface PluginState {
 const state: PluginState = {
   api: null,
   config: null,
+  clawsecConfig: null,
   initialized: false,
   logger: createNoOpLogger(),
   handlers: {
@@ -328,27 +340,74 @@ export function activate(api: OpenClawPluginAPI): () => void {
     return () => deactivate();
   }
 
+  // Load the clawsec.yaml configuration
+  try {
+    const configPath = state.config?.configPath;
+    state.clawsecConfig = loadConfig(configPath);
+    state.logger.info('Configuration loaded successfully');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    state.logger.error(`Failed to load configuration: ${errorMessage}`);
+    state.logger.info('Using placeholder handlers (allow-all mode)');
+
+    // Fall back to placeholder handlers
+    state.handlers.beforeToolCall = beforeToolCallHandler;
+    state.handlers.beforeAgentStart = beforeAgentStartHandler;
+    state.handlers.toolResultPersist = toolResultPersistHandler;
+
+    // Register placeholder hooks
+    api.registerHook('before-tool-call', beforeToolCallHandler, {
+      name: 'before-tool-call',
+      id: 'clawsec-before-tool-call',
+      priority: 100,
+      enabled: true,
+    });
+
+    api.registerHook('before-agent-start', beforeAgentStartHandler, {
+      name: 'before-agent-start',
+      id: 'clawsec-before-agent-start',
+      priority: 50,
+      enabled: true,
+    });
+
+    api.registerHook('tool-result-persist', toolResultPersistHandler, {
+      name: 'tool-result-persist',
+      id: 'clawsec-tool-result-persist',
+      priority: 100,
+      enabled: true,
+    });
+
+    state.initialized = true;
+    state.logger.warn('Plugin activated in fallback mode (all actions allowed)');
+    return () => deactivate();
+  }
+
+  // Create handlers with loaded config
+  const beforeToolCallHandlerWithConfig = createBeforeToolCallHandler(state.clawsecConfig);
+  const beforeAgentStartHandlerWithConfig = createBeforeAgentStartHandler(state.clawsecConfig);
+  const toolResultPersistHandlerWithConfig = createToolResultPersistHandler(state.clawsecConfig);
+
   // Store handler references
-  state.handlers.beforeToolCall = beforeToolCallHandler;
-  state.handlers.beforeAgentStart = beforeAgentStartHandler;
-  state.handlers.toolResultPersist = toolResultPersistHandler;
+  state.handlers.beforeToolCall = beforeToolCallHandlerWithConfig;
+  state.handlers.beforeAgentStart = beforeAgentStartHandlerWithConfig;
+  state.handlers.toolResultPersist = toolResultPersistHandlerWithConfig;
 
   // Register hooks with OpenClaw
-  api.registerHook('before-tool-call', beforeToolCallHandler, {
+  api.registerHook('before-tool-call', beforeToolCallHandlerWithConfig, {
     name: 'before-tool-call',
     id: 'clawsec-before-tool-call',
     priority: 100,
     enabled: true,
   });
 
-  api.registerHook('before-agent-start', beforeAgentStartHandler, {
+  api.registerHook('before-agent-start', beforeAgentStartHandlerWithConfig, {
     name: 'before-agent-start',
     id: 'clawsec-before-agent-start',
     priority: 50,
     enabled: true,
   });
 
-  api.registerHook('tool-result-persist', toolResultPersistHandler, {
+  api.registerHook('tool-result-persist', toolResultPersistHandlerWithConfig, {
     name: 'tool-result-persist',
     id: 'clawsec-tool-result-persist',
     priority: 100,
