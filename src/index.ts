@@ -241,74 +241,79 @@ const state: PluginState = {
 };
 
 // =============================================================================
-// PLACEHOLDER HOOK HANDLERS
+// DEFAULT CONFIGURATION
 // =============================================================================
 
 /**
- * Placeholder handler for before-tool-call hook.
- * Will be replaced with full implementation in Task 2.x
+ * Generate default security configuration
+ * Used as fallback when custom config fails to load
  */
-const beforeToolCallHandler: BeforeToolCallHandler = async (
-  context: ToolCallContext
-): Promise<BeforeToolCallResult> => {
-  // Log for debugging during development
-  state.logger.debug(`before-tool-call: ${context.toolName}`, {
-    sessionId: context.sessionId,
-    toolInput: context.toolInput,
-  });
-
-  // Placeholder: Allow all tool calls
-  // TODO: Implement actual detection logic in Task 2.x
+function getDefaultConfig(): ClawsecConfig {
   return {
-    allow: true,
+    version: '1.0',
+    global: {
+      enabled: true,
+      logLevel: 'info',
+    },
+    llm: {
+      enabled: true,
+      model: null,
+    },
+    rules: {
+      purchase: {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        spendLimits: { perTransaction: 100, daily: 500 },
+        domains: { mode: 'blocklist', blocklist: [] },
+      },
+      website: {
+        enabled: true,
+        mode: 'blocklist',
+        severity: 'high',
+        action: 'block',
+        blocklist: [],
+        allowlist: [],
+      },
+      destructive: {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+        shell: { enabled: true },
+        cloud: { enabled: true },
+        code: { enabled: true },
+      },
+      secrets: {
+        enabled: true,
+        severity: 'critical',
+        action: 'block',
+      },
+      exfiltration: {
+        enabled: true,
+        severity: 'high',
+        action: 'block',
+      },
+      sanitization: {
+        enabled: true,
+        severity: 'high',
+        action: 'block',
+        minConfidence: 0.5,
+        redactMatches: false,
+        categories: {
+          instructionOverride: true,
+          systemLeak: true,
+          jailbreak: true,
+          encodedPayload: true,
+        },
+      },
+    },
+    approval: {
+      native: { enabled: true, timeout: 300 },
+      agentConfirm: { enabled: true, parameterName: '_clawsec_confirm' },
+      webhook: { enabled: false, timeout: 30, headers: {} },
+    },
   };
-};
-
-/**
- * Placeholder handler for before-agent-start hook.
- * Will be replaced with full implementation in Task 2.x
- */
-const beforeAgentStartHandler: BeforeAgentStartHandler = async (
-  context: AgentStartContext
-): Promise<BeforeAgentStartResult> => {
-  // Log for debugging during development
-  state.logger.debug('before-agent-start', {
-    sessionId: context.sessionId,
-  });
-
-  // Placeholder: Inject basic security reminder into system prompt
-  // TODO: Implement configurable prompts in Task 2.x
-  const securityReminder = `
-[CLAWSEC SECURITY CONTEXT]
-This session is protected by Clawsec security plugin.
-- Purchases and financial transactions require approval
-- Destructive commands (rm -rf, DROP TABLE, etc.) are monitored
-- Sensitive data in outputs may be filtered
-`;
-
-  return {
-    systemPromptAddition: securityReminder,
-  };
-};
-
-/**
- * Placeholder handler for tool-result-persist hook.
- * Will be replaced with full implementation in Task 2.x
- */
-const toolResultPersistHandler: ToolResultPersistHandler = async (
-  context: ToolResultContext
-): Promise<ToolResultPersistResult> => {
-  // Log for debugging during development
-  state.logger.debug(`tool-result-persist: ${context.toolName}`, {
-    sessionId: context.sessionId,
-  });
-
-  // Placeholder: Allow all results to persist
-  // TODO: Implement actual filtering logic in Task 2.x
-  return {
-    allow: true,
-  };
-};
+}
 
 // =============================================================================
 // PLUGIN LIFECYCLE
@@ -348,29 +353,52 @@ export function activate(api: OpenClawPluginAPI): () => void {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     state.logger.error(`Failed to load configuration: ${errorMessage}`);
-    state.logger.info('Using placeholder handlers (allow-all mode)');
+    state.logger.warn('Using default security configuration');
 
-    // Fall back to placeholder handlers
-    state.handlers.beforeToolCall = beforeToolCallHandler;
-    state.handlers.beforeAgentStart = beforeAgentStartHandler;
-    state.handlers.toolResultPersist = toolResultPersistHandler;
+    // Use default config instead of no config
+    const defaultConfig = getDefaultConfig();
+    state.clawsecConfig = defaultConfig;
 
-    // Register placeholder hooks
-    api.registerHook('before-tool-call', beforeToolCallHandler, {
+    // Create handlers with default config
+    const beforeToolCallHandlerWithConfig = createBeforeToolCallHandler(
+      defaultConfig,
+      undefined,
+      state.logger
+    );
+
+    const beforeAgentStartHandlerWithConfig = createBeforeAgentStartHandler(
+      defaultConfig,
+      undefined,
+      state.logger
+    );
+
+    const toolResultPersistHandlerWithConfig = createToolResultPersistHandler(
+      defaultConfig,
+      undefined,
+      state.logger
+    );
+
+    // Store handler references
+    state.handlers.beforeToolCall = beforeToolCallHandlerWithConfig;
+    state.handlers.beforeAgentStart = beforeAgentStartHandlerWithConfig;
+    state.handlers.toolResultPersist = toolResultPersistHandlerWithConfig;
+
+    // Register hooks with default config
+    api.registerHook('before-tool-call', beforeToolCallHandlerWithConfig, {
       name: 'before-tool-call',
       id: 'clawsec-before-tool-call',
       priority: 100,
       enabled: true,
     });
 
-    api.registerHook('before-agent-start', beforeAgentStartHandler, {
+    api.registerHook('before-agent-start', beforeAgentStartHandlerWithConfig, {
       name: 'before-agent-start',
       id: 'clawsec-before-agent-start',
       priority: 50,
       enabled: true,
     });
 
-    api.registerHook('tool-result-persist', toolResultPersistHandler, {
+    api.registerHook('tool-result-persist', toolResultPersistHandlerWithConfig, {
       name: 'tool-result-persist',
       id: 'clawsec-tool-result-persist',
       priority: 100,
@@ -378,7 +406,7 @@ export function activate(api: OpenClawPluginAPI): () => void {
     });
 
     state.initialized = true;
-    state.logger.warn('Plugin activated in fallback mode (all actions allowed)');
+    state.logger.warn('Plugin initialized with default config due to error');
     return () => deactivate();
   }
 
