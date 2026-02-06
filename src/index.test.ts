@@ -111,7 +111,7 @@ describe('Clawsec Plugin', () => {
   
   describe('Constants', () => {
     it('exports VERSION', () => {
-      expect(VERSION).toBe('1.0.0');
+      expect(VERSION).toBe('0.0.1');
     });
 
     it('exports PLUGIN_ID', () => {
@@ -176,7 +176,7 @@ describe('Clawsec Plugin', () => {
       
       expect(api.log).toHaveBeenCalledWith(
         'info',
-        '[clawsec] Activating Clawsec Security Plugin v1.0.0',
+        '[clawsec] Activating Clawsec Security Plugin v0.0.1',
         undefined
       );
     });
