@@ -24,6 +24,9 @@ import { createAnalyzer } from '../../engine/analyzer.js';
 import { createActionExecutor } from '../../actions/executor.js';
 import { createAgentConfirmHandler } from '../../approval/agent-confirm.js';
 import { getDefaultApprovalStore } from '../../approval/store.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger(null, null);
 
 /**
  * Options for creating a before-tool-call handler
@@ -165,8 +168,12 @@ export function createBeforeToolCallHandler(
   const confirmParamName = config.approval?.agentConfirm?.parameterName ?? '_clawsec_confirm';
 
   return async (context: HookToolCallContext): Promise<BeforeToolCallResult> => {
+    const toolName = context.toolName;
+    logger.debug(`[Hook:before-tool-call] Entry: tool=${toolName}`);
+
     // 1. Check if plugin is disabled
     if (config.global?.enabled === false) {
+      logger.debug(`[Hook:before-tool-call] Plugin disabled, allowing tool`);
       return createDisabledResult();
     }
 
@@ -190,9 +197,11 @@ export function createBeforeToolCallHandler(
             context.toolInput,
             confirmParamName
           );
+          logger.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow (agent-confirm validated)`);
           return createAgentConfirmAllowResult(strippedInput);
         } else {
           // Invalid confirmation - block
+          logger.warn(`[Hook:before-tool-call] Exit: tool=${toolName}, result=block (invalid agent-confirm)`);
           return createAgentConfirmInvalidResult(processResult.error);
         }
       }
@@ -204,6 +213,7 @@ export function createBeforeToolCallHandler(
 
     // 4. If no detections or action is allow/log/warn, handle appropriately
     if (analysis.action === 'allow') {
+      logger.debug(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow`);
       return createAllowResult();
     }
 
@@ -217,7 +227,9 @@ export function createBeforeToolCallHandler(
     const actionResult = await executor.execute(actionContext);
 
     // 6. Convert to BeforeToolCallResult
-    return toBeforeToolCallResult(actionResult, analysis.primaryDetection);
+    const result = toBeforeToolCallResult(actionResult, analysis.primaryDetection);
+    logger.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=${result.allow ? 'allow' : analysis.action}`);
+    return result;
   };
 }
 

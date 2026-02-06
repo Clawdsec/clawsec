@@ -12,6 +12,9 @@ import type {
 } from '../../index.js';
 import type { ClawsecConfig } from '../../config/schema.js';
 import { buildSecurityContextPrompt } from './prompts.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger(null, null);
 
 /**
  * Options for creating a before-agent-start handler
@@ -44,8 +47,11 @@ export function createBeforeAgentStartHandler(
   const injectPrompt = options?.injectPrompt ?? true;
 
   return async (_context: AgentStartContext): Promise<BeforeAgentStartResult> => {
+    logger.debug(`[Hook:before-agent-start] Entry: injecting security context`);
+
     // If prompt injection is disabled via options, return empty result
     if (!injectPrompt) {
+      logger.debug(`[Hook:before-agent-start] Prompt injection disabled`);
       return {};
     }
 
@@ -54,11 +60,13 @@ export function createBeforeAgentStartHandler(
 
     // Return the result with the prompt addition (if any)
     if (systemPromptAddition) {
+      logger.debug(`[Hook:before-agent-start] Exit: prompt built, length=${systemPromptAddition.length} chars`);
       return {
         systemPromptAddition,
       };
     }
 
+    logger.debug(`[Hook:before-agent-start] Exit: no prompt additions`);
     return {};
   };
 }

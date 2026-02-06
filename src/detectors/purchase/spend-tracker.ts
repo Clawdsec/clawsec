@@ -4,6 +4,9 @@
  */
 
 import type { SpendLimits } from '../../config/index.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger(null, null);
 
 /**
  * Record of a tracked spend transaction
@@ -132,11 +135,13 @@ export function extractAmountFromInput(toolInput: Record<string, unknown>): numb
     const value = toolInput[field];
     if (value !== undefined && value !== null) {
       if (typeof value === 'number' && value > 0) {
+        logger.debug(`[SpendTracker] Extracted amount: ${value} from field="${field}"`);
         return value;
       }
       if (typeof value === 'string') {
         const parsed = extractAmount(value);
         if (parsed !== null) {
+          logger.debug(`[SpendTracker] Extracted amount: ${parsed} from field="${field}"`);
           return parsed;
         }
       }
@@ -153,6 +158,7 @@ export function extractAmountFromInput(toolInput: Record<string, unknown>): numb
         if (param) {
           const parsed = extractAmount(param);
           if (parsed !== null) {
+            logger.debug(`[SpendTracker] Extracted amount: ${parsed} from URL param="${field}"`);
             return parsed;
           }
         }
@@ -167,6 +173,7 @@ export function extractAmountFromInput(toolInput: Record<string, unknown>): numb
   if (formData && typeof formData === 'object') {
     const result = extractAmountFromInput(formData as Record<string, unknown>);
     if (result !== null) {
+      logger.debug(`[SpendTracker] Extracted amount: ${result} from nested form data`);
       return result;
     }
   }
@@ -180,11 +187,15 @@ export function extractAmountFromInput(toolInput: Record<string, unknown>): numb
         const value = (field as Record<string, unknown>).value;
         if (typeof name === 'string' && amountFields.includes(name.toLowerCase())) {
           if (typeof value === 'number' && value > 0) {
+            logger.debug(`[SpendTracker] Extracted amount: ${value} from fields array (name="${name}")`);
             return value;
           }
           if (typeof value === 'string') {
             const parsed = extractAmount(value);
             if (parsed !== null) {
+              logger.debug(
+                `[SpendTracker] Extracted amount: ${parsed} from fields array (name="${name}")`
+              );
               return parsed;
             }
           }
@@ -204,6 +215,7 @@ export function extractAmountFromInput(toolInput: Record<string, unknown>): numb
     if (currencyMatch && currencyMatch[1]) {
       const parsed = extractAmount(value);
       if (parsed !== null) {
+        logger.debug(`[SpendTracker] Extracted amount: ${parsed} from currency pattern in key="${key}"`);
         return parsed;
       }
     }
@@ -280,8 +292,15 @@ export class SpendTracker implements ISpendTracker {
     const dailyTotal = this.getDailyTotal();
     const remainingDaily = Math.max(0, limits.daily - dailyTotal);
 
+    logger.debug(
+      `[SpendTracker] Checking limits: amount=${amount}, dailyTotal=${dailyTotal}, perTxLimit=${limits.perTransaction}, dailyLimit=${limits.daily}`
+    );
+
     // Check per-transaction limit first
     if (amount > limits.perTransaction) {
+      logger.warn(
+        `[SpendTracker] Limit exceeded: amount=${amount}, limit=${limits.perTransaction}, type=perTransaction`
+      );
       return {
         allowed: false,
         exceededLimit: 'perTransaction',
@@ -293,6 +312,9 @@ export class SpendTracker implements ISpendTracker {
 
     // Check if adding this amount would exceed daily limit
     if (dailyTotal + amount > limits.daily) {
+      logger.warn(
+        `[SpendTracker] Limit exceeded: amount=${amount}, dailyTotal=${dailyTotal}, limit=${limits.daily}, type=daily`
+      );
       return {
         allowed: false,
         exceededLimit: 'daily',

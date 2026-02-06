@@ -9,6 +9,9 @@ import type {
   DestructiveDetector as IDestructiveDetector,
   DestructiveDetectorConfig,
 } from './types.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger(null, null);
 import { ShellDetector, createShellDetector } from './shell-detector.js';
 import { CloudDetector, createCloudDetector } from './cloud-detector.js';
 import { CodeDetector, createCodeDetector } from './code-detector.js';
@@ -141,8 +144,11 @@ export class DestructiveDetectorImpl implements IDestructiveDetector {
   }
 
   async detect(context: DetectionContext): Promise<DestructiveDetectionResult> {
+    logger.debug(`[DestructiveDetector] Starting detection: tool=${context.toolName}`);
+
     // Check if detector is enabled
     if (!this.config.enabled) {
+      logger.debug(`[DestructiveDetector] Detector disabled`);
       return noDetection(this.config.severity);
     }
 
@@ -150,21 +156,49 @@ export class DestructiveDetectorImpl implements IDestructiveDetector {
 
     // Run shell detector
     if (this.shellDetector) {
-      results.push(this.shellDetector.detect(context));
+      logger.debug(`[DestructiveDetector] Running shell detector`);
+      const result = this.shellDetector.detect(context);
+      if (result && result.detected) {
+        logger.info(`[DestructiveDetector] Shell detection: operation=${result.metadata?.operation || 'unknown'}, confidence=${result.confidence}`);
+      }
+      results.push(result);
     }
 
     // Run cloud detector (includes git commands)
     if (this.cloudDetector) {
-      results.push(this.cloudDetector.detect(context));
+      logger.debug(`[DestructiveDetector] Running cloud detector`);
+      const result = this.cloudDetector.detect(context);
+      if (result && result.detected) {
+        logger.info(`[DestructiveDetector] Cloud detection: operation=${result.metadata?.operation || 'unknown'}, confidence=${result.confidence}`);
+      }
+      results.push(result);
     }
 
     // Run code detector
     if (this.codeDetector) {
-      results.push(this.codeDetector.detect(context));
+      logger.debug(`[DestructiveDetector] Running code detector`);
+      const result = this.codeDetector.detect(context);
+      if (result && result.detected) {
+        logger.info(`[DestructiveDetector] Code detection: operation=${result.metadata?.operation || 'unknown'}, confidence=${result.confidence}`);
+      }
+      results.push(result);
     }
 
     // Combine results
-    return combineResults(results, this.config.severity);
+    const validDetections = results.filter((r): r is DestructiveDetectionResult => r !== null && r.detected);
+    if (validDetections.length === 0) {
+      logger.debug(`[DestructiveDetector] No detections found`);
+    } else {
+      logger.debug(`[DestructiveDetector] Combining ${validDetections.length} detections`);
+      if (validDetections.length > 1) {
+        logger.info(`[DestructiveDetector] Confidence boost: multiple sub-detectors triggered (${validDetections.length})`);
+      }
+    }
+
+    const combined = combineResults(results, this.config.severity);
+    logger.debug(`[DestructiveDetector] Detection complete: detected=${combined.detected}, confidence=${combined.confidence}`);
+    
+    return combined;
   }
 
   /**

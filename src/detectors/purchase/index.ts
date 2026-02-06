@@ -9,6 +9,9 @@ import type {
   PurchaseDetector as IPurchaseDetector,
   PurchaseDetectorConfig,
 } from './types.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger(null, null);
 import { DomainDetector, createDomainDetector } from './domain-detector.js';
 import { UrlDetector, createUrlDetector } from './url-detector.js';
 import { FormDetector, createFormDetector } from './form-detector.js';
@@ -142,24 +145,53 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
   }
 
   async detect(context: DetectionContext): Promise<DetectionResult> {
+    logger.debug(`[PurchaseDetector] Starting detection: tool=${context.toolName}`);
+
     // Check if detector is enabled
     if (!this.config.enabled) {
+      logger.debug(`[PurchaseDetector] Detector disabled`);
       return noDetection(this.config.severity);
     }
 
     // Run all sub-detectors
+    logger.debug(`[PurchaseDetector] Running domain detector`);
     const domainResult = this.domainDetector.detect(context);
+    if (domainResult && domainResult.detected) {
+      logger.info(`[PurchaseDetector] Domain detection: domain=${domainResult.metadata?.domain || 'unknown'}, confidence=${domainResult.confidence}`);
+    }
+
+    logger.debug(`[PurchaseDetector] Running URL detector`);
     const urlResult = this.urlDetector.detect(context);
+    if (urlResult && urlResult.detected) {
+      logger.info(`[PurchaseDetector] URL detection: url=${urlResult.metadata?.url || 'unknown'}, confidence=${urlResult.confidence}`);
+    }
+
+    logger.debug(`[PurchaseDetector] Running form detector`);
     const formResult = this.formDetector.detect(context);
+    if (formResult && formResult.detected) {
+      logger.info(`[PurchaseDetector] Form detection: fields=${formResult.metadata?.formFields?.join(',') || 'unknown'}, confidence=${formResult.confidence}`);
+    }
 
     // Combine results
+    const validDetections = [domainResult, urlResult, formResult].filter((r): r is DetectionResult => r !== null && r.detected);
+    if (validDetections.length === 0) {
+      logger.debug(`[PurchaseDetector] No detections found`);
+    } else {
+      logger.debug(`[PurchaseDetector] Combining ${validDetections.length} detections`);
+      if (validDetections.length > 1) {
+        logger.info(`[PurchaseDetector] Confidence boost: multiple sub-detectors triggered (${validDetections.length})`);
+      }
+    }
+
     let result = combineResults([domainResult, urlResult, formResult], this.config.severity);
 
     // If purchase detected and spend limits configured, check limits
     if (result.detected && this.config.spendLimits) {
+      logger.debug(`[PurchaseDetector] Checking spend limits`);
       result = this.checkSpendLimits(result, context);
     }
 
+    logger.debug(`[PurchaseDetector] Detection complete: detected=${result.detected}, confidence=${result.confidence}`);
     return result;
   }
 

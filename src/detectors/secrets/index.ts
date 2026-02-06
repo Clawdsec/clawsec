@@ -9,6 +9,9 @@ import type {
   SecretsDetector as ISecretsDetector,
   SecretsDetectorConfig,
 } from './types.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger(null, null);
 import { ApiKeyDetector, createApiKeyDetector } from './api-key-detector.js';
 import { TokenDetector, createTokenDetector } from './token-detector.js';
 import { PiiDetector, createPiiDetector } from './pii-detector.js';
@@ -228,8 +231,11 @@ export class SecretsDetectorImpl implements ISecretsDetector {
   }
 
   async detect(context: SecretsDetectionContext): Promise<SecretsDetectionResult> {
+    logger.debug(`[SecretsDetector] Starting detection: tool=${context.toolName}`);
+
     // Check if detector is enabled
     if (!this.config.enabled) {
+      logger.debug(`[SecretsDetector] Detector disabled`);
       return noDetection(this.config.severity);
     }
 
@@ -237,23 +243,59 @@ export class SecretsDetectorImpl implements ISecretsDetector {
 
     // Extract text content from tool input
     const inputContent = extractTextContent(context.toolInput);
+    logger.debug(`[SecretsDetector] Scanning ${inputContent.size} text fields in tool input`);
+
     for (const [location, text] of inputContent) {
-      allResults.push(...this.apiKeyDetector.scan(text, `input.${location}`));
-      allResults.push(...this.tokenDetector.scan(text, `input.${location}`));
-      allResults.push(...this.piiDetector.scan(text, `input.${location}`));
-      allResults.push(...scanCredentials(text, `input.${location}`, this.config.severity));
+      logger.debug(`[SecretsDetector] Running API key detector on ${location}`);
+      const apiKeyResults = this.apiKeyDetector.scan(text, `input.${location}`);
+      if (apiKeyResults.length > 0) {
+        logger.info(`[SecretsDetector] API key detection: count=${apiKeyResults.length}, location=${location}`);
+      }
+      allResults.push(...apiKeyResults);
+
+      logger.debug(`[SecretsDetector] Running token detector on ${location}`);
+      const tokenResults = this.tokenDetector.scan(text, `input.${location}`);
+      if (tokenResults.length > 0) {
+        logger.info(`[SecretsDetector] Token detection: count=${tokenResults.length}, location=${location}`);
+      }
+      allResults.push(...tokenResults);
+
+      logger.debug(`[SecretsDetector] Running PII detector on ${location}`);
+      const piiResults = this.piiDetector.scan(text, `input.${location}`);
+      if (piiResults.length > 0) {
+        logger.info(`[SecretsDetector] PII detection: count=${piiResults.length}, location=${location}`);
+      }
+      allResults.push(...piiResults);
+
+      logger.debug(`[SecretsDetector] Running credential scanner on ${location}`);
+      const credResults = scanCredentials(text, `input.${location}`, this.config.severity);
+      if (credResults.length > 0) {
+        logger.info(`[SecretsDetector] Credential detection: count=${credResults.length}, location=${location}`);
+      }
+      allResults.push(...credResults);
     }
 
     // Also scan tool output if provided
     if (context.toolOutput) {
+      logger.debug(`[SecretsDetector] Scanning tool output`);
       allResults.push(...this.apiKeyDetector.scan(context.toolOutput, 'output'));
       allResults.push(...this.tokenDetector.scan(context.toolOutput, 'output'));
       allResults.push(...this.piiDetector.scan(context.toolOutput, 'output'));
       allResults.push(...scanCredentials(context.toolOutput, 'output', this.config.severity));
     }
 
+    const detections = allResults.filter((r) => r.detected);
+    if (detections.length === 0) {
+      logger.debug(`[SecretsDetector] No secrets detected`);
+    } else {
+      logger.debug(`[SecretsDetector] Combining ${detections.length} secret detections`);
+    }
+
     // Combine and return results
-    return combineResults(allResults, this.config.severity);
+    const combined = combineResults(allResults, this.config.severity);
+    logger.debug(`[SecretsDetector] Detection complete: detected=${combined.detected}, confidence=${combined.confidence}`);
+    
+    return combined;
   }
 
   /**

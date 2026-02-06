@@ -15,6 +15,9 @@ import type {
   WebsiteDetector as IWebsiteDetector,
   WebsiteDetectorConfig,
 } from './types.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger(null, null);
 import { 
   extractDomain, 
   extractUrlFromContext, 
@@ -74,26 +77,34 @@ export class WebsiteDetectorImpl implements IWebsiteDetector {
   }
 
   async detect(context: DetectionContext): Promise<WebsiteDetectionResult> {
+    logger.debug(`[WebsiteDetector] Starting detection: tool=${context.toolName}`);
+
     // Check if detector is enabled
     if (!this.config.enabled) {
+      logger.debug(`[WebsiteDetector] Detector disabled`);
       return noDetection(this.config.severity, this.config.mode);
     }
 
     // Extract URL from context
     const url = extractUrlFromContext(context);
     if (!url) {
+      logger.debug(`[WebsiteDetector] No URL found in context`);
       return noDetection(this.config.severity, this.config.mode);
     }
 
     // Extract domain from URL
     const domain = extractDomain(url);
     if (!domain) {
+      logger.debug(`[WebsiteDetector] Could not extract domain from URL: ${url}`);
       return noDetection(this.config.severity, this.config.mode);
     }
+
+    logger.debug(`[WebsiteDetector] Checking domain: ${domain} (mode: ${this.config.mode})`);
 
     // First, check for dangerous categories (malware, phishing) regardless of mode
     const categoryResult = detectCategory(domain);
     if (categoryResult.detected && categoryResult.category && isDangerousCategory(categoryResult.category)) {
+      logger.info(`[WebsiteDetector] Dangerous category detected: ${categoryResult.category}, confidence=${categoryResult.confidence}`);
       return {
         detected: true,
         category: 'website',
@@ -111,11 +122,19 @@ export class WebsiteDetectorImpl implements IWebsiteDetector {
     }
 
     // Apply mode-based filtering
-    if (this.config.mode === 'allowlist') {
-      return this.checkAllowlistMode(url, domain, categoryResult);
+    logger.debug(`[WebsiteDetector] Applying ${this.config.mode} mode filtering`);
+    const result = this.config.mode === 'allowlist'
+      ? this.checkAllowlistMode(url, domain, categoryResult)
+      : this.checkBlocklistMode(url, domain, categoryResult);
+
+    if (result.detected) {
+      logger.info(`[WebsiteDetector] Detection: domain=${domain}, confidence=${result.confidence}, reason="${result.reason}"`);
     } else {
-      return this.checkBlocklistMode(url, domain, categoryResult);
+      logger.debug(`[WebsiteDetector] No detection: domain=${domain} is allowed`);
     }
+
+    logger.debug(`[WebsiteDetector] Detection complete: detected=${result.detected}`);
+    return result;
   }
 
   /**
