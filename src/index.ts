@@ -348,7 +348,7 @@ export function activate(api: OpenClawPluginAPI): () => void {
   // Load the clawsec.yaml configuration
   try {
     const configPath = state.config?.configPath;
-    state.clawsecConfig = loadConfig(configPath);
+    state.clawsecConfig = loadConfig(configPath, state.logger);
     state.logger.info('Configuration loaded successfully');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

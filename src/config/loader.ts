@@ -10,10 +10,7 @@ import { z } from 'zod';
 import { ClawsecConfigSchema, type ClawsecConfig, type PartialClawsecConfig } from './schema.js';
 import { getDefaultConfig } from './defaults.js';
 import { loadTemplates, deepMergeConfigs } from './template-loader.js';
-import { createLogger } from '../utils/logger.js';
-
-// Create a logger that falls back to console for config loading (happens before plugin activation)
-const logger = createLogger(null, null);
+import { createLogger, type Logger } from '../utils/logger.js';
 
 // =============================================================================
 // ERROR TYPES
@@ -191,49 +188,52 @@ export function findConfigFile(startDir: string = process.cwd()): string | null 
  * If no config file is found, returns default configuration.
  *
  * @param configPath - Optional path to configuration file
+ * @param logger - Optional logger instance (creates fallback if not provided)
  * @returns Validated configuration
  * @throws ConfigLoadError if specified file doesn't exist or can't be parsed
  * @throws ConfigValidationError if configuration is invalid
  */
-export function loadConfig(configPath?: string): ClawsecConfig {
+export function loadConfig(configPath?: string, logger?: Logger): ClawsecConfig {
+  const log = logger ?? createLogger(null, null);
+
   // Determine which config file to use
   const foundPath = configPath ? path.resolve(configPath) : findConfigFile();
 
   if (!foundPath) {
     // No config file found, return defaults
-    logger.debug('[Config] No config file found, using defaults');
+    log.debug('[Config] No config file found, using defaults');
     return getDefaultConfig();
   }
 
-  logger.info(`[Config] Loading config from: ${foundPath}`);
+  log.info(`[Config] Loading config from: ${foundPath}`);
   const userConfig = readYamlFile(foundPath) as PartialClawsecConfig;
 
   // Handle empty file case
   if (userConfig === null || userConfig === undefined) {
-    logger.warn('[Config] Config file is empty, using defaults');
+    log.warn('[Config] Config file is empty, using defaults');
     return getDefaultConfig();
   }
 
   // Check for extends field
   if (userConfig.extends && Array.isArray(userConfig.extends) && userConfig.extends.length > 0) {
-    logger.info(`[Config] Found extends field with ${userConfig.extends.length} templates`);
-    
+    log.info(`[Config] Found extends field with ${userConfig.extends.length} templates`);
+
     // Load all templates
-    const templateConfig = loadTemplates(userConfig.extends);
+    const templateConfig = loadTemplates(userConfig.extends, log);
 
     // Merge: templates first, then user config (user overrides templates)
     const merged = deepMergeConfigs(templateConfig, userConfig);
-    logger.debug('[Config] Merged template config with user config');
+    log.debug('[Config] Merged template config with user config');
 
     // Remove extends field before validation (not part of final schema)
     delete (merged as Record<string, unknown>).extends;
-    logger.debug('[Config] Removed extends field before validation');
+    log.debug('[Config] Removed extends field before validation');
 
     return validateConfig(merged);
   }
 
   // No extends, validate as-is
-  logger.debug('[Config] No extends field, validating config directly');
+  log.debug('[Config] No extends field, validating config directly');
   return validateConfig(userConfig);
 }
 
@@ -241,39 +241,42 @@ export function loadConfig(configPath?: string): ClawsecConfig {
  * Loads configuration from a YAML string with template inheritance support.
  *
  * @param yamlContent - YAML string to parse
+ * @param logger - Optional logger instance (creates fallback if not provided)
  * @returns Validated configuration
  * @throws ConfigValidationError if configuration is invalid
  */
-export function loadConfigFromString(yamlContent: string): ClawsecConfig {
-  logger.debug('[Config] Loading config from string');
+export function loadConfigFromString(yamlContent: string, logger?: Logger): ClawsecConfig {
+  const log = logger ?? createLogger(null, null);
+
+  log.debug('[Config] Loading config from string');
   const userConfig = parseYaml(yamlContent) as PartialClawsecConfig;
 
   // Handle empty content
   if (userConfig === null || userConfig === undefined) {
-    logger.warn('[Config] Config string is empty, using defaults');
+    log.warn('[Config] Config string is empty, using defaults');
     return getDefaultConfig();
   }
 
   // Check for extends field
   if (userConfig.extends && Array.isArray(userConfig.extends) && userConfig.extends.length > 0) {
-    logger.info(`[Config] Found extends field with ${userConfig.extends.length} templates`);
-    
+    log.info(`[Config] Found extends field with ${userConfig.extends.length} templates`);
+
     // Load all templates
-    const templateConfig = loadTemplates(userConfig.extends);
+    const templateConfig = loadTemplates(userConfig.extends, log);
 
     // Merge: templates first, then user config (user overrides templates)
     const merged = deepMergeConfigs(templateConfig, userConfig);
-    logger.debug('[Config] Merged template config with user config');
+    log.debug('[Config] Merged template config with user config');
 
     // Remove extends field before validation (not part of final schema)
     delete (merged as Record<string, unknown>).extends;
-    logger.debug('[Config] Removed extends field before validation');
+    log.debug('[Config] Removed extends field before validation');
 
     return validateConfig(merged);
   }
 
   // No extends, validate as-is
-  logger.debug('[Config] No extends field, validating config directly');
+  log.debug('[Config] No extends field, validating config directly');
   return validateConfig(userConfig);
 }
 
