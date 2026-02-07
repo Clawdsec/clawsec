@@ -91,12 +91,36 @@ function determineAction(
 
   // Get primary detection (highest severity, highest confidence)
   const primary = detections[0];
-  const { severity, confidence } = primary;
+  const { severity, confidence, category } = primary;
 
   // Check if LLM is enabled in config
   const llmEnabled = config.llm?.enabled ?? false;
 
-  // Determine action based on severity and confidence
+  // FIRST: Check if config specifies an action for this category
+  // Skip 'unknown' category as it's not a valid config key
+  if (category !== 'unknown') {
+    const categoryConfig = config.rules[category];
+    if (categoryConfig?.action) {
+      // User explicitly configured an action - RESPECT IT
+      let configuredAction = categoryConfig.action;
+
+      // Convert 'agent-confirm' to 'confirm' for internal use
+      if (configuredAction === 'agent-confirm') {
+        configuredAction = 'confirm';
+      }
+
+      // Determine if LLM should be involved (if confidence is ambiguous)
+      const isAmbiguous = confidence >= 0.5 && confidence <= 0.8;
+      const requiresLLM = llmEnabled && isAmbiguous;
+
+      return {
+        action: configuredAction as AnalysisAction,
+        requiresLLM
+      };
+    }
+  }
+
+  // FALLBACK: If no config action specified, use confidence-based logic
   switch (severity) {
     case 'critical':
       if (confidence > 0.8) {
