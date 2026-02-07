@@ -281,9 +281,9 @@ describe('Integration: Before Agent Start Hook', () => {
 
     const result = await handler(context);
 
-    expect(result.prependContext).toBeDefined();
-    expect(result.prependContext).toContain('CLAWSEC');
-    expect(result.prependContext).toContain('security');
+    expect(result.systemPromptAddition).toBeDefined();
+    expect(result.systemPromptAddition).toContain('CLAWSEC');
+    expect(result.systemPromptAddition).toContain('security');
   });
 
   it('should include relevant protection categories', async () => {
@@ -294,8 +294,8 @@ describe('Integration: Before Agent Start Hook', () => {
 
     const result = await handler(context);
 
-    expect(result.prependContext).toContain('Destructive');
-    expect(result.prependContext).toContain('Purchase');
+    expect(result.systemPromptAddition).toContain('Destructive');
+    expect(result.systemPromptAddition).toContain('Purchase');
   });
 
   it('should return empty when plugin is disabled', async () => {
@@ -312,7 +312,7 @@ describe('Integration: Before Agent Start Hook', () => {
 
     const result = await disabledHandler(context);
 
-    expect(result.prependContext).toBeUndefined();
+    expect(result.systemPromptAddition).toBeUndefined();
   });
 });
 
@@ -405,7 +405,7 @@ describe('Integration: Full Workflow', () => {
       timestamp: Date.now(),
     };
     const agentResult = await agentHandler(agentContext);
-    expect(agentResult.prependContext).toBeDefined();
+    expect(agentResult.systemPromptAddition).toBeDefined();
 
     // 2. Tool call is intercepted (safe call)
     const toolHandler = createBeforeToolCallHandler(testConfig);

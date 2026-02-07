@@ -85,21 +85,21 @@ export function createBeforeAgentStartHandler(
       }
 
       // Build the security context prompt based on config
-      let prependContext: string | undefined;
+      let systemPromptAddition: string | undefined;
       try {
-        prependContext = buildSecurityContextPrompt(config);
+        systemPromptAddition = buildSecurityContextPrompt(config);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         log.error(`[Hook:before-agent-start] Error building prompt: ${errorMessage}`, error);
         return {}; // Fail-open: allow agent to start without security context
       }
 
-      // Return the result with the prepended context (if any) - modern API
-      if (prependContext) {
+      // Return the result with the system prompt addition (if any) - modern API
+      if (systemPromptAddition) {
         injectedSessions.add(sessionId); // Mark this session as injected
-        log.info(`[Hook:before-agent-start] Exit: session=${sessionId}, injected=${prependContext.length} chars`);
+        log.info(`[Hook:before-agent-start] Exit: session=${sessionId}, injected=${systemPromptAddition.length} chars`);
         return {
-          prependContext,
+          systemPromptAddition,
         };
       }
 
