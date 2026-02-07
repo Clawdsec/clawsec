@@ -35,37 +35,40 @@ export interface ToolResultPersistHandlerOptions {
 }
 
 /**
- * Create an allow result with no filtering
+ * Create an allow result with no filtering (modern API)
  */
 function createAllowResult(): ToolResultPersistResult {
-  return {
-    allow: true,
-  };
+  return {}; // Modern API: empty object means no changes (allow)
 }
 
 /**
- * Create a block result for detected prompt injections
+ * Create a block result for detected prompt injections (modern API)
+ * Note: Modern API doesn't support blocking, only filtering.
+ * We'll return empty message with redactions metadata.
  */
 function createBlockResult(
   redactions: Array<{ type: string; description: string }>
 ): ToolResultPersistResult {
   return {
-    allow: false,
-    redactions,
+    message: {
+      content: '[BLOCKED: Content violated security policy]',
+      redactions,
+    },
   };
 }
 
 /**
- * Create a result with filtered output and redaction info
+ * Create a result with filtered output and redaction info (modern API)
  */
 function createFilteredResult(
   filteredOutput: unknown,
   redactions: Array<{ type: string; description: string }>
 ): ToolResultPersistResult {
   return {
-    allow: true,
-    filteredOutput,
-    redactions,
+    message: {
+      content: filteredOutput,
+      redactions,
+    },
   };
 }
 

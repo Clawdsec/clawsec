@@ -63,15 +63,15 @@ export interface ToolCallContext extends HookContext {
 }
 
 /**
- * Result from before-tool-call hook
+ * Result from before-tool-call hook (modern API)
  */
 export interface BeforeToolCallResult {
-  /** Whether to allow the tool call to proceed */
-  allow: boolean;
-  /** Modified tool input (if transformed) */
-  modifiedInput?: Record<string, unknown>;
-  /** Message to display when blocked */
-  blockMessage?: string;
+  /** Whether to block the tool call (default: false = allow) */
+  block?: boolean;
+  /** Reason for blocking (if blocked) */
+  blockReason?: string;
+  /** Modified tool parameters (if transformed) */
+  params?: Record<string, unknown>;
   /** Metadata about the detection */
   metadata?: {
     category?: ThreatCategory;
@@ -97,11 +97,13 @@ export interface AgentStartContext extends HookContext {
 }
 
 /**
- * Result from before-agent-start hook
+ * Result from before-agent-start hook (modern API)
  */
 export interface BeforeAgentStartResult {
-  /** Modified or injected system prompt content */
-  systemPromptAddition?: string;
+  /** System prompt replacement (replaces entire prompt) */
+  systemPrompt?: string;
+  /** Context to prepend to existing prompt */
+  prependContext?: string;
   /** Modified agent configuration */
   modifiedConfig?: Record<string, unknown>;
 }
@@ -123,18 +125,17 @@ export interface ToolResultContext extends HookContext {
 }
 
 /**
- * Result from tool-result-persist hook
+ * Result from tool-result-persist hook (modern API)
  */
 export interface ToolResultPersistResult {
-  /** Whether to allow the result to be persisted */
-  allow: boolean;
-  /** Filtered/redacted output */
-  filteredOutput?: unknown;
-  /** Metadata about any redactions */
-  redactions?: Array<{
-    type: string;
-    description: string;
-  }>;
+  /** Modified message object (if filtering/redacting) */
+  message?: {
+    content?: unknown;
+    redactions?: Array<{
+      type: string;
+      description: string;
+    }>;
+  };
 }
 
 /**
@@ -148,30 +149,14 @@ export type ToolResultPersistHandler = (
  * OpenClaw plugin API interface
  */
 export interface OpenClawPluginAPI {
-  /** Register a hook handler */
-  registerHook: (hookName: string, handler: unknown, options?: HookOptions) => void;
-  /** Unregister a hook handler */
-  unregisterHook: (hookName: string, handlerId: string) => void;
+  /** Register a hook handler (modern event-based API) */
+  on: (hookName: string, handler: unknown, options?: { priority?: number }) => void;
   /** Plugin configuration */
   config: PluginConfig;
   /** Log a message */
   log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, data?: unknown) => void;
   /** Request user approval */
   requestApproval: (request: ApprovalRequest) => Promise<ApprovalResponse>;
-}
-
-/**
- * Hook registration options
- */
-export interface HookOptions {
-  /** Display name for this hook handler */
-  name?: string;
-  /** Unique identifier for this handler */
-  id?: string;
-  /** Priority (lower runs first) */
-  priority?: number;
-  /** Whether this hook is enabled */
-  enabled?: boolean;
 }
 
 /**
@@ -220,11 +205,6 @@ interface PluginState {
   clawsecConfig: ClawsecConfig | null;
   initialized: boolean;
   logger: Logger;
-  handlers: {
-    beforeToolCall: BeforeToolCallHandler | null;
-    beforeAgentStart: BeforeAgentStartHandler | null;
-    toolResultPersist: ToolResultPersistHandler | null;
-  };
 }
 
 const state: PluginState = {
@@ -233,11 +213,6 @@ const state: PluginState = {
   clawsecConfig: null,
   initialized: false,
   logger: createNoOpLogger(),
-  handlers: {
-    beforeToolCall: null,
-    beforeAgentStart: null,
-    toolResultPersist: null,
-  },
 };
 
 // =============================================================================
@@ -378,32 +353,10 @@ export function activate(api: OpenClawPluginAPI): () => void {
       state.logger
     );
 
-    // Store handler references
-    state.handlers.beforeToolCall = beforeToolCallHandlerWithConfig;
-    state.handlers.beforeAgentStart = beforeAgentStartHandlerWithConfig;
-    state.handlers.toolResultPersist = toolResultPersistHandlerWithConfig;
-
-    // Register hooks with default config
-    api.registerHook('before-tool-call', beforeToolCallHandlerWithConfig, {
-      name: 'before-tool-call',
-      id: 'clawsec-before-tool-call',
-      priority: 100,
-      enabled: true,
-    });
-
-    api.registerHook('before-agent-start', beforeAgentStartHandlerWithConfig, {
-      name: 'before-agent-start',
-      id: 'clawsec-before-agent-start',
-      priority: 50,
-      enabled: true,
-    });
-
-    api.registerHook('tool-result-persist', toolResultPersistHandlerWithConfig, {
-      name: 'tool-result-persist',
-      id: 'clawsec-tool-result-persist',
-      priority: 100,
-      enabled: true,
-    });
+    // Register hooks with default config (modern API)
+    api.on('before_tool_call', beforeToolCallHandlerWithConfig, { priority: 100 });
+    api.on('before_agent_start', beforeAgentStartHandlerWithConfig, { priority: 50 });
+    api.on('tool_result_persist', toolResultPersistHandlerWithConfig, { priority: 100 });
 
     state.initialized = true;
     state.logger.warn('Plugin initialized with default config due to error');
@@ -415,32 +368,10 @@ export function activate(api: OpenClawPluginAPI): () => void {
   const beforeAgentStartHandlerWithConfig = createBeforeAgentStartHandler(state.clawsecConfig, undefined, state.logger);
   const toolResultPersistHandlerWithConfig = createToolResultPersistHandler(state.clawsecConfig, undefined, state.logger);
 
-  // Store handler references
-  state.handlers.beforeToolCall = beforeToolCallHandlerWithConfig;
-  state.handlers.beforeAgentStart = beforeAgentStartHandlerWithConfig;
-  state.handlers.toolResultPersist = toolResultPersistHandlerWithConfig;
-
-  // Register hooks with OpenClaw
-  api.registerHook('before-tool-call', beforeToolCallHandlerWithConfig, {
-    name: 'before-tool-call',
-    id: 'clawsec-before-tool-call',
-    priority: 100,
-    enabled: true,
-  });
-
-  api.registerHook('before-agent-start', beforeAgentStartHandlerWithConfig, {
-    name: 'before-agent-start',
-    id: 'clawsec-before-agent-start',
-    priority: 50,
-    enabled: true,
-  });
-
-  api.registerHook('tool-result-persist', toolResultPersistHandlerWithConfig, {
-    name: 'tool-result-persist',
-    id: 'clawsec-tool-result-persist',
-    priority: 100,
-    enabled: true,
-  });
+  // Register hooks with OpenClaw (modern API)
+  api.on('before_tool_call', beforeToolCallHandlerWithConfig, { priority: 100 });
+  api.on('before_agent_start', beforeAgentStartHandlerWithConfig, { priority: 50 });
+  api.on('tool_result_persist', toolResultPersistHandlerWithConfig, { priority: 100 });
 
   state.initialized = true;
   state.logger.info('All hooks registered successfully');
@@ -460,13 +391,7 @@ export function deactivate(): void {
   const api = state.api;
   if (api) {
     state.logger.info('Deactivating Clawsec Security Plugin');
-
-    // Unregister all hooks
-    api.unregisterHook('before-tool-call', 'clawsec-before-tool-call');
-    api.unregisterHook('before-agent-start', 'clawsec-before-agent-start');
-    api.unregisterHook('tool-result-persist', 'clawsec-tool-result-persist');
-
-    state.logger.info('All hooks unregistered');
+    // Modern API: hooks are automatically unregistered by OpenClaw
   }
 
   // Reset state
@@ -474,9 +399,6 @@ export function deactivate(): void {
   state.config = null;
   state.initialized = false;
   state.logger = createNoOpLogger();
-  state.handlers.beforeToolCall = null;
-  state.handlers.beforeAgentStart = null;
-  state.handlers.toolResultPersist = null;
 }
 
 /**
@@ -533,8 +455,8 @@ export const pluginConfigSchema = {
  *
  * @param api - The OpenClaw plugin API
  */
-function register(api: OpenClawPluginAPI): void {
-  activate(api);
+function register(api: OpenClawPluginAPI): () => void {
+  return activate(api);
 }
 
 // =============================================================================

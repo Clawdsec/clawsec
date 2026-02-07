@@ -57,13 +57,13 @@ export function createBeforeAgentStartHandler(
     }
 
     // Build the security context prompt based on config
-    const systemPromptAddition = buildSecurityContextPrompt(config);
+    const prependContext = buildSecurityContextPrompt(config);
 
-    // Return the result with the prompt addition (if any)
-    if (systemPromptAddition) {
-      log.debug(`[Hook:before-agent-start] Exit: prompt built, length=${systemPromptAddition.length} chars`);
+    // Return the result with the prepended context (if any) - modern API
+    if (prependContext) {
+      log.debug(`[Hook:before-agent-start] Exit: prompt built, length=${prependContext.length} chars`);
       return {
-        systemPromptAddition,
+        prependContext,
       };
     }
 

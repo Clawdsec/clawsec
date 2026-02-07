@@ -118,15 +118,15 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeDefined();
-      expect(result.systemPromptAddition).toContain(SECURITY_CONTEXT_HEADER);
-      expect(result.systemPromptAddition).toContain(BASE_SECURITY_INTRO);
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.purchase);
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.destructive);
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.secrets);
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.website);
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.exfiltration);
-      expect(result.systemPromptAddition).toContain(SECURITY_CONTEXT_FOOTER);
+      expect(result.prependContext).toBeDefined();
+      expect(result.prependContext).toContain(SECURITY_CONTEXT_HEADER);
+      expect(result.prependContext).toContain(BASE_SECURITY_INTRO);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.purchase);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.destructive);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.secrets);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.website);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.exfiltration);
+      expect(result.prependContext).toContain(SECURITY_CONTEXT_FOOTER);
     });
 
     it('should include all sections in correct order', async () => {
@@ -135,7 +135,7 @@ describe('BeforeAgentStartHandler', () => {
       const context = createTestContext();
 
       const result = await handler(context);
-      const prompt = result.systemPromptAddition!;
+      const prompt = result.prependContext!;
 
       // Check order: header -> intro -> reminders -> instructions -> footer
       const headerIndex = prompt.indexOf(SECURITY_CONTEXT_HEADER);
@@ -154,8 +154,8 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeDefined();
-      expect(result.systemPromptAddition).toContain(SECURITY_CONTEXT_HEADER);
+      expect(result.prependContext).toBeDefined();
+      expect(result.prependContext).toContain(SECURITY_CONTEXT_HEADER);
     });
   });
 
@@ -207,11 +207,11 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.purchase);
-      expect(result.systemPromptAddition).not.toContain(CATEGORY_REMINDERS.website);
-      expect(result.systemPromptAddition).not.toContain(CATEGORY_REMINDERS.destructive);
-      expect(result.systemPromptAddition).not.toContain(CATEGORY_REMINDERS.secrets);
-      expect(result.systemPromptAddition).not.toContain(CATEGORY_REMINDERS.exfiltration);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.purchase);
+      expect(result.prependContext).not.toContain(CATEGORY_REMINDERS.website);
+      expect(result.prependContext).not.toContain(CATEGORY_REMINDERS.destructive);
+      expect(result.prependContext).not.toContain(CATEGORY_REMINDERS.secrets);
+      expect(result.prependContext).not.toContain(CATEGORY_REMINDERS.exfiltration);
     });
 
     it('should only include destructive reminder when destructive rule enabled', async () => {
@@ -257,8 +257,8 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.destructive);
-      expect(result.systemPromptAddition).not.toContain(CATEGORY_REMINDERS.purchase);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.destructive);
+      expect(result.prependContext).not.toContain(CATEGORY_REMINDERS.purchase);
     });
 
     it('should only include secrets reminder when secrets rule enabled', async () => {
@@ -304,8 +304,8 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.secrets);
-      expect(result.systemPromptAddition).not.toContain(CATEGORY_REMINDERS.purchase);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.secrets);
+      expect(result.prependContext).not.toContain(CATEGORY_REMINDERS.purchase);
     });
 
     it('should include multiple reminders when multiple rules enabled', async () => {
@@ -351,11 +351,11 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.purchase);
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.destructive);
-      expect(result.systemPromptAddition).toContain(CATEGORY_REMINDERS.exfiltration);
-      expect(result.systemPromptAddition).not.toContain(CATEGORY_REMINDERS.website);
-      expect(result.systemPromptAddition).not.toContain(CATEGORY_REMINDERS.secrets);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.purchase);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.destructive);
+      expect(result.prependContext).toContain(CATEGORY_REMINDERS.exfiltration);
+      expect(result.prependContext).not.toContain(CATEGORY_REMINDERS.website);
+      expect(result.prependContext).not.toContain(CATEGORY_REMINDERS.secrets);
     });
   });
 
@@ -373,7 +373,7 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeUndefined();
+      expect(result.prependContext).toBeUndefined();
     });
 
     it('should return empty result when prompt injection is disabled via options', async () => {
@@ -383,7 +383,7 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeUndefined();
+      expect(result.prependContext).toBeUndefined();
     });
   });
 
@@ -405,9 +405,9 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toContain('_clawsec_confirm');
-      expect(result.systemPromptAddition).toContain('approval-id');
-      expect(result.systemPromptAddition).toContain('confirmable actions');
+      expect(result.prependContext).toContain('_clawsec_confirm');
+      expect(result.prependContext).toContain('approval-id');
+      expect(result.prependContext).toContain('confirmable actions');
     });
 
     it('should use custom parameter name in instructions', async () => {
@@ -423,8 +423,8 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toContain('_custom_approve');
-      expect(result.systemPromptAddition).not.toContain('_clawsec_confirm');
+      expect(result.prependContext).toContain('_custom_approve');
+      expect(result.prependContext).not.toContain('_clawsec_confirm');
     });
 
     it('should not include agent-confirm instructions when disabled', async () => {
@@ -441,9 +441,9 @@ describe('BeforeAgentStartHandler', () => {
       const result = await handler(context);
 
       // Should still have the prompt but without agent-confirm instructions
-      expect(result.systemPromptAddition).toBeDefined();
-      expect(result.systemPromptAddition).not.toContain('_clawsec_confirm');
-      expect(result.systemPromptAddition).not.toContain('confirmable actions');
+      expect(result.prependContext).toBeDefined();
+      expect(result.prependContext).not.toContain('_clawsec_confirm');
+      expect(result.prependContext).not.toContain('confirmable actions');
     });
   });
 
@@ -495,7 +495,7 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeUndefined();
+      expect(result.prependContext).toBeUndefined();
     });
 
     it('should return empty modifiedConfig when not provided', async () => {
@@ -523,7 +523,7 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeDefined();
+      expect(result.prependContext).toBeDefined();
     });
 
     it('should handle context with systemPrompt', async () => {
@@ -535,7 +535,7 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeDefined();
+      expect(result.prependContext).toBeDefined();
     });
 
     it('should handle context with agentConfig', async () => {
@@ -547,7 +547,7 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeDefined();
+      expect(result.prependContext).toBeDefined();
     });
   });
 
@@ -739,8 +739,8 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result).toHaveProperty('systemPromptAddition');
-      expect(result.systemPromptAddition).toContain(SECURITY_CONTEXT_HEADER);
+      expect(result).toHaveProperty('prependContext');
+      expect(result.prependContext).toContain(SECURITY_CONTEXT_HEADER);
     });
   });
 
@@ -766,7 +766,7 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeUndefined();
+      expect(result.prependContext).toBeUndefined();
     });
 
     it('should handle undefined approval gracefully', async () => {
@@ -817,8 +817,8 @@ describe('BeforeAgentStartHandler', () => {
       const result = await handler(context);
 
       // Should still work with default agent-confirm parameter
-      expect(result.systemPromptAddition).toBeDefined();
-      expect(result.systemPromptAddition).toContain('_clawsec_confirm');
+      expect(result.prependContext).toBeDefined();
+      expect(result.prependContext).toContain('_clawsec_confirm');
     });
 
     it('should handle empty context', async () => {
@@ -831,7 +831,7 @@ describe('BeforeAgentStartHandler', () => {
 
       const result = await handler(context);
 
-      expect(result.systemPromptAddition).toBeDefined();
+      expect(result.prependContext).toBeDefined();
     });
   });
 });

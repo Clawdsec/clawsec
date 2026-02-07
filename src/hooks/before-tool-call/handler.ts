@@ -52,19 +52,19 @@ function toEngineContext(hookContext: HookToolCallContext): EngineToolCallContex
 }
 
 /**
- * Convert analysis result and action result to BeforeToolCallResult
+ * Convert analysis result and action result to BeforeToolCallResult (modern API)
  */
 function toBeforeToolCallResult(
   actionResult: ActionResult,
   detection?: Detection
 ): BeforeToolCallResult {
   const result: BeforeToolCallResult = {
-    allow: actionResult.allowed,
+    block: !actionResult.allowed, // Inverted: !allow = block
   };
 
-  // Add block message if not allowed
+  // Add block reason if blocked
   if (!actionResult.allowed && actionResult.message) {
-    result.blockMessage = actionResult.message;
+    result.blockReason = actionResult.message;
   }
 
   // Add metadata from primary detection
@@ -81,43 +81,43 @@ function toBeforeToolCallResult(
     }
   }
 
-  // Add pending approval instructions to block message if present
+  // Add pending approval instructions to block reason if present
   if (actionResult.pendingApproval) {
     const approvalInfo = `\n\nApproval ID: ${actionResult.pendingApproval.id}\nTimeout: ${actionResult.pendingApproval.timeout}s\nMethods: ${actionResult.pendingApproval.methods.join(', ')}`;
-    result.blockMessage = (result.blockMessage || 'Approval required') + approvalInfo;
+    result.blockReason = (result.blockReason || 'Approval required') + approvalInfo;
   }
 
   return result;
 }
 
 /**
- * Create the allow result for when no threats are detected
+ * Create the allow result for when no threats are detected (modern API)
  */
 function createAllowResult(): BeforeToolCallResult {
   return {
-    allow: true,
+    block: false, // Modern: explicit false means allow
   };
 }
 
 /**
- * Create a result for valid agent-confirm flow
+ * Create a result for valid agent-confirm flow (modern API)
  */
 function createAgentConfirmAllowResult(
   strippedInput: Record<string, unknown>
 ): BeforeToolCallResult {
   return {
-    allow: true,
-    modifiedInput: strippedInput,
+    block: false,
+    params: strippedInput, // Modern: renamed from modifiedInput
   };
 }
 
 /**
- * Create a result for invalid agent-confirm flow
+ * Create a result for invalid agent-confirm flow (modern API)
  */
 function createAgentConfirmInvalidResult(error?: string): BeforeToolCallResult {
   return {
-    allow: false,
-    blockMessage: error || 'Invalid or expired approval confirmation',
+    block: true, // Modern: true = block
+    blockReason: error || 'Invalid or expired approval confirmation',
     metadata: {
       reason: 'Agent confirmation parameter was present but invalid',
     },
@@ -125,11 +125,11 @@ function createAgentConfirmInvalidResult(error?: string): BeforeToolCallResult {
 }
 
 /**
- * Create a result for disabled plugin
+ * Create a result for disabled plugin (modern API)
  */
 function createDisabledResult(): BeforeToolCallResult {
   return {
-    allow: true,
+    block: false,
   };
 }
 
@@ -231,7 +231,7 @@ export function createBeforeToolCallHandler(
 
     // 6. Convert to BeforeToolCallResult
     const result = toBeforeToolCallResult(actionResult, analysis.primaryDetection);
-    log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=${result.allow ? 'allow' : analysis.action}`);
+    log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=${result.block ? 'block' : 'allow'}`);
     return result;
   };
 }
