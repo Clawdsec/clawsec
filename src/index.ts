@@ -113,8 +113,8 @@ export interface AgentStartContext extends HookContext {
 export interface BeforeAgentStartResult {
   /** System prompt replacement (replaces entire prompt) */
   systemPrompt?: string;
-  /** Context to add to system prompt (silently injected, invisible to user) */
-  systemPromptAddition?: string;
+  /** Context to prepend before user message (OpenClaw's actual API field) */
+  prependContext?: string;
   /** Modified agent configuration */
   modifiedConfig?: Record<string, unknown>;
 }

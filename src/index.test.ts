@@ -437,14 +437,14 @@ describe('Clawsec Plugin', () => {
         );
         expect(registerCall).toBeDefined();
 
-        const handler = registerCall![1] as (context: AgentStartContext) => Promise<{ systemPromptAddition?: string }>;
+        const handler = registerCall![1] as (context: AgentStartContext) => Promise<{ prependContext?: string }>;
         const context = createAgentStartContext();
 
         const result = await handler(context);
 
-        // Handler should inject some security context (modern API: systemPromptAddition field)
-        expect(result.systemPromptAddition).toBeDefined();
-        expect(result.systemPromptAddition).toContain('CLAWSEC SECURITY CONTEXT');
+        // Handler should inject some security context (modern API: prependContext field)
+        expect(result.prependContext).toBeDefined();
+        expect(result.prependContext).toContain('CLAWSEC SECURITY CONTEXT');
       });
 
       it('handler executes successfully', async () => {
@@ -454,7 +454,7 @@ describe('Clawsec Plugin', () => {
         const registerCall = vi.mocked(api.on).mock.calls.find(
           call => call[0] === 'before_agent_start'
         );
-        const handler = registerCall![1] as (context: AgentStartContext) => Promise<{ systemPromptAddition?: string }>;
+        const handler = registerCall![1] as (context: AgentStartContext) => Promise<{ prependContext?: string }>;
         const context = createAgentStartContext();
 
         // Should not throw

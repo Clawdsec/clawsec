@@ -85,21 +85,21 @@ export function createBeforeAgentStartHandler(
       }
 
       // Build the security context prompt based on config
-      let systemPromptAddition: string | undefined;
+      let prependContext: string | undefined;
       try {
-        systemPromptAddition = buildSecurityContextPrompt(config);
+        prependContext = buildSecurityContextPrompt(config);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         log.error(`[Hook:before-agent-start] Error building prompt: ${errorMessage}`, error);
         return {}; // Fail-open: allow agent to start without security context
       }
 
-      // Return the result with the system prompt addition (if any) - modern API
-      if (systemPromptAddition) {
+      // Return the result with prependContext (OpenClaw's actual API field)
+      if (prependContext) {
         injectedSessions.add(sessionId); // Mark this session as injected
-        log.info(`[Hook:before-agent-start] Exit: session=${sessionId}, injected=${systemPromptAddition.length} chars`);
+        log.info(`[Hook:before-agent-start] Exit: session=${sessionId}, injected=${prependContext.length} chars`);
         return {
-          systemPromptAddition,
+          prependContext,
         };
       }
 
