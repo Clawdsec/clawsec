@@ -49,13 +49,24 @@ export function createBeforeAgentStartHandler(
 
   return async (context: AgentStartContext): Promise<BeforeAgentStartResult> => {
     try {
-      // Validate context first (before accessing properties)
-      if (!context || !context.sessionId) {
+      // Normalize context: Extract/generate sessionId if missing
+      let sessionId: string | undefined = context.sessionId;
+
+      if (!sessionId && context.messages && context.messages.length > 0) {
+        // Try to extract from first message timestamp
+        const firstMsg = context.messages[0];
+        sessionId = `session_${firstMsg.timestamp || Date.now()}`;
+      } else if (!sessionId) {
+        // Generate from current timestamp
+        sessionId = `session_${context.timestamp || Date.now()}`;
+      }
+
+      // Validate we have essential data
+      if (!context || !sessionId) {
         log.error(`[Hook:before-agent-start] Invalid context received`, context);
         return {}; // Fail-open for invalid context
       }
 
-      const sessionId = context.sessionId;
       log.info(`[Hook:before-agent-start] Entry: session=${sessionId}`);
 
       // If prompt injection is disabled via options, return empty result

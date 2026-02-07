@@ -171,14 +171,17 @@ const HIGH_CONFIDENCE_PATTERNS = [
  */
 function matchesPattern(field: string, patterns: string[]): string | null {
   const fieldLower = field.toLowerCase().replace(/[-_\s]/g, '');
-  
+
   for (const pattern of patterns) {
     const patternLower = pattern.toLowerCase().replace(/[-_\s]/g, '');
-    if (fieldLower.includes(patternLower) || patternLower.includes(fieldLower)) {
+    // Only check if field contains pattern (one direction)
+    // This allows "billing_address" to match "address"
+    // But prevents "action" from matching "transaction-amount"
+    if (fieldLower.includes(patternLower)) {
       return pattern;
     }
   }
-  
+
   return null;
 }
 

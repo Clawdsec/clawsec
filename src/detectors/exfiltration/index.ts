@@ -132,10 +132,11 @@ export class ExfiltrationDetectorImpl implements ExfiltrationDetector {
     this.config = config;
     this.logger = logger ?? createLogger(null, null);
 
-    // Initialize sub-detectors
-    this.httpDetector = createHttpDetector(config.severity, this.logger);
-    this.cloudDetector = createCloudUploadDetector(config.severity, this.logger);
-    this.networkDetector = createNetworkDetector(config.severity, this.logger);
+    // Initialize sub-detectors with custom patterns
+    const customPatterns = config.patterns || [];
+    this.httpDetector = createHttpDetector(config.severity, customPatterns, this.logger);
+    this.cloudDetector = createCloudUploadDetector(config.severity, customPatterns, this.logger);
+    this.networkDetector = createNetworkDetector(config.severity, customPatterns, this.logger);
   }
 
   async detect(context: DetectionContext): Promise<ExfiltrationDetectionResult> {

@@ -821,18 +821,20 @@ describe('BeforeAgentStartHandler', () => {
       expect(result.prependContext).toContain('_clawsec_confirm');
     });
 
-    it('should handle empty sessionId gracefully', async () => {
+    it('should handle empty sessionId gracefully by generating one', async () => {
       const config = createTestConfig();
       const handler = createBeforeAgentStartHandler(config);
       const context: AgentStartContext = {
         sessionId: '',
-        timestamp: 0,
+        timestamp: 12345,
       };
 
-      // Empty sessionId triggers validation failure, returns empty result (fail-open)
+      // Empty sessionId is generated from timestamp, security context is injected
       const result = await handler(context);
 
-      expect(result).toEqual({});
+      // Should inject security context (not fail)
+      expect(result.prependContext).toBeDefined();
+      expect(result.prependContext).toContain('Work safely within these protections');
     });
   });
 
@@ -847,24 +849,28 @@ describe('BeforeAgentStartHandler', () => {
       expect(result).toEqual({}); // Fail-open
     });
 
-    it('should handle context with missing sessionId', async () => {
+    it('should handle context with missing sessionId by generating one', async () => {
       const config = createTestConfig();
       const handler = createBeforeAgentStartHandler(config);
 
       // @ts-expect-error Testing malformed context
-      const result = await handler({});
+      const result = await handler({ timestamp: 12345 });
 
-      expect(result).toEqual({}); // Fail-open
+      // Should generate sessionId and inject security context
+      expect(result.prependContext).toBeDefined();
+      expect(result.prependContext).toContain('Work safely within these protections');
     });
 
-    it('should handle context with undefined sessionId', async () => {
+    it('should handle context with undefined sessionId by generating one', async () => {
       const config = createTestConfig();
       const handler = createBeforeAgentStartHandler(config);
 
       // @ts-expect-error Testing malformed context
-      const result = await handler({ sessionId: undefined, timestamp: Date.now() });
+      const result = await handler({ sessionId: undefined, timestamp: 12345 });
 
-      expect(result).toEqual({}); // Fail-open
+      // Should generate sessionId from timestamp and inject security context
+      expect(result.prependContext).toBeDefined();
+      expect(result.prependContext).toContain('Work safely within these protections');
     });
   });
 });

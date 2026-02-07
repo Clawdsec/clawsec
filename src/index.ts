@@ -45,7 +45,7 @@ export type ThreatCategory = 'purchase' | 'website' | 'destructive' | 'secrets' 
  * Base context provided to all hooks
  */
 export interface HookContext {
-  sessionId: string;
+  sessionId?: string;  // Optional - may need to be extracted/generated
   userId?: string;
   timestamp: number;
 }
@@ -93,8 +93,18 @@ export type BeforeToolCallHandler = (
  * Agent start context passed to before-agent-start hook
  */
 export interface AgentStartContext extends HookContext {
+  // Expected fields (from our design)
   systemPrompt?: string;
   agentConfig?: Record<string, unknown>;
+
+  // Alternative fields (what OpenClaw actually sends)
+  prompt?: string;
+  messages?: Array<{
+    role: 'user' | 'assistant' | 'toolResult' | string;
+    content: unknown;
+    timestamp?: number;
+    [key: string]: unknown;
+  }>;
 }
 
 /**
