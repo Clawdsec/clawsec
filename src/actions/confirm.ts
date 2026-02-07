@@ -5,6 +5,8 @@
 
 import type { ActionContext, ActionHandler, ActionResult, ActionLogger, ApprovalMethod, PendingApproval } from './types.js';
 import { noOpLogger } from './types.js';
+import { getDefaultApprovalStore } from '../approval/store.js';
+import type { PendingApprovalInput } from '../approval/types.js';
 
 /**
  * Generate a UUID v4
@@ -76,6 +78,7 @@ function formatCategory(category: string): string {
     destructive: 'Destructive Command',
     secrets: 'Secrets/PII',
     exfiltration: 'Data Transfer',
+    unknown: 'Manual Approval',
   };
   return categoryNames[category] || category;
 }
@@ -86,9 +89,9 @@ function formatCategory(category: string): string {
 function generateApprovalInstructions(methods: ApprovalMethod[], approvalId: string, context: ActionContext): string {
   const instructions: string[] = [];
 
-  if (methods.includes('native')) {
-    instructions.push(`  - Type: /approve ${approvalId}`);
-  }
+  // DON'T suggest native /approve - conflicts with OpenClaw's /approve command
+  // OpenClaw has /approve with syntax: /approve allow-once|allow-always|deny
+  // Suggesting /approve <id> causes command collision and confusion
 
   if (methods.includes('agent-confirm')) {
     const paramName = context.config.approval?.agentConfirm?.parameterName ?? '_clawsec_confirm';
@@ -97,6 +100,11 @@ function generateApprovalInstructions(methods: ApprovalMethod[], approvalId: str
 
   if (methods.includes('webhook')) {
     instructions.push(`  - Webhook approval is enabled (external system will be notified)`);
+  }
+
+  // If no usable methods remain, provide helpful fallback message
+  if (instructions.length === 0) {
+    instructions.push(`  - Contact administrator to approve (webhook required)`);
   }
 
   return instructions.join('\n');
@@ -114,11 +122,11 @@ export function generateConfirmMessage(context: ActionContext, approval: Pending
   if (primaryDetection) {
     const category = formatCategory(primaryDetection.category);
     const severity = formatSeverity(primaryDetection.severity);
-    message = `[${severity}] ${category} requires approval\n`;
+    message = `ClawSec Protection: [${severity}] ${category} requires approval\n`;
     message += `Tool: ${toolCall.toolName}\n`;
     message += `Reason: ${primaryDetection.reason}\n\n`;
   } else {
-    message = `Action requires approval\n`;
+    message = `ClawSec Protection: Action requires approval\n`;
     message += `Tool: ${toolCall.toolName}\n\n`;
   }
 
@@ -152,6 +160,34 @@ export class ConfirmHandler implements ActionHandler {
     // Get timeout
     const timeout = getApprovalTimeout(context);
 
+    // Create full approval record for storage
+    const now = Date.now();
+    const approvalInput: PendingApprovalInput = {
+      id: approvalId,
+      createdAt: now,
+      expiresAt: now + (timeout * 1000),
+      detection: analysis.primaryDetection ? {
+        category: analysis.primaryDetection.category,
+        severity: analysis.primaryDetection.severity,
+        confidence: analysis.primaryDetection.confidence,
+        reason: analysis.primaryDetection.reason,
+      } : {
+        category: 'unknown', // No specific threat detected - manual approval
+        severity: 'medium',
+        confidence: 0.5,
+        reason: 'Manual approval required',
+      },
+      toolCall: {
+        toolName: toolCall.toolName,
+        toolInput: toolCall.toolInput || {},
+      },
+    };
+
+    // Store the approval record
+    const store = getDefaultApprovalStore();
+    store.add(approvalInput);
+
+    // Create lightweight object for ActionResult
     const pendingApproval: PendingApproval = {
       id: approvalId,
       timeout,
