@@ -117,11 +117,11 @@ export function generateConfirmMessage(context: ActionContext, approval: Pending
   if (primaryDetection) {
     const category = formatCategory(primaryDetection.category);
     const severity = formatSeverity(primaryDetection.severity);
-    message = `[${severity}] ${category} requires approval\n`;
+    message = `ClawSec Protection: [${severity}] ${category} requires approval\n`;
     message += `Tool: ${toolCall.toolName}\n`;
     message += `Reason: ${primaryDetection.reason}\n\n`;
   } else {
-    message = `Action requires approval\n`;
+    message = `ClawSec Protection: Action requires approval\n`;
     message += `Tool: ${toolCall.toolName}\n\n`;
   }
 
