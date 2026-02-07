@@ -22,6 +22,12 @@ import { createBeforeToolCallHandler } from './hooks/before-tool-call/handler.js
 import { createBeforeAgentStartHandler } from './hooks/before-agent-start/handler.js';
 import { createToolResultPersistHandler } from './hooks/tool-result-persist/handler.js';
 
+// Approval system singleton reset functions
+import { resetDefaultApprovalStore } from './approval/store.js';
+import { resetDefaultNativeApprovalHandler } from './approval/native.js';
+import { resetDefaultAgentConfirmHandler } from './approval/agent-confirm.js';
+import { resetDefaultWebhookApprovalClient } from './approval/webhook.js';
+
 // =============================================================================
 // TYPE DEFINITIONS
 // =============================================================================
@@ -468,6 +474,13 @@ export function deactivate(): void {
 
     state.logger.info('All hooks unregistered');
   }
+
+  // Reset all module-level singletons to prevent stale state on re-activation
+  state.logger.debug('Resetting module-level singletons');
+  resetDefaultApprovalStore();
+  resetDefaultNativeApprovalHandler();
+  resetDefaultAgentConfirmHandler();
+  resetDefaultWebhookApprovalClient();
 
   // Reset state
   state.api = null;

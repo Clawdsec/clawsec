@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openclaw.ai/schemas/plugin.json",
+  "id": "clawsec-poc",
+  "name": "Clawsec POC",
+  "version": "1.0.0-poc",
+  "kind": "debug",
+  "description": "Minimal POC for debugging hook persistence across activations",
+  "author": "Clawsec Team",
+  "license": "MIT",
+  "engines": {
+    "openclaw": ">=1.0.0",
+    "node": ">=18.0.0"
+  },
+  "main": "dist/src/index-poc.js",
+  "configSchema": {}
+}
