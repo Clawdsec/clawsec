@@ -89,9 +89,9 @@ function formatCategory(category: string): string {
 function generateApprovalInstructions(methods: ApprovalMethod[], approvalId: string, context: ActionContext): string {
   const instructions: string[] = [];
 
-  if (methods.includes('native')) {
-    instructions.push(`  - Type: /approve ${approvalId}`);
-  }
+  // DON'T suggest native /approve - conflicts with OpenClaw's /approve command
+  // OpenClaw has /approve with syntax: /approve allow-once|allow-always|deny
+  // Suggesting /approve <id> causes command collision and confusion
 
   if (methods.includes('agent-confirm')) {
     const paramName = context.config.approval?.agentConfirm?.parameterName ?? '_clawsec_confirm';
@@ -100,6 +100,11 @@ function generateApprovalInstructions(methods: ApprovalMethod[], approvalId: str
 
   if (methods.includes('webhook')) {
     instructions.push(`  - Webhook approval is enabled (external system will be notified)`);
+  }
+
+  // If no usable methods remain, provide helpful fallback message
+  if (instructions.length === 0) {
+    instructions.push(`  - Contact administrator to approve (webhook required)`);
   }
 
   return instructions.join('\n');

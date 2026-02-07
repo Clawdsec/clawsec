@@ -254,7 +254,9 @@ describe('ConfirmHandler', () => {
 
       expect(result.message).toContain('Approval ID:');
       expect(result.message).toContain('Timeout: 300 seconds');
-      expect(result.message).toContain('/approve');
+      // Should NOT include /approve (conflicts with OpenClaw's native command)
+      expect(result.message).not.toContain('/approve');
+      // Should include agent-confirm parameter instruction
       expect(result.message).toContain('_clawsec_confirm=');
     });
   });
