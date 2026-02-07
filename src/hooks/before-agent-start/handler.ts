@@ -47,6 +47,9 @@ export function createBeforeAgentStartHandler(
   const log = logger ?? createLogger(null, null);
   const injectPrompt = options?.injectPrompt ?? true;
 
+  // Track which sessions have already received security context
+  const injectedSessions = new Set<string>();
+
   return async (context: AgentStartContext): Promise<BeforeAgentStartResult> => {
     try {
       // Normalize context: Extract/generate sessionId if missing
@@ -69,6 +72,12 @@ export function createBeforeAgentStartHandler(
 
       log.info(`[Hook:before-agent-start] Entry: session=${sessionId}`);
 
+      // CHECK: If already injected for this session, return empty result
+      if (injectedSessions.has(sessionId)) {
+        log.debug(`[Hook:before-agent-start] Security context already injected for session=${sessionId}, skipping`);
+        return {}; // Empty result - no re-injection
+      }
+
       // If prompt injection is disabled via options, return empty result
       if (!injectPrompt) {
         log.info(`[Hook:before-agent-start] Prompt injection disabled`);
@@ -87,6 +96,7 @@ export function createBeforeAgentStartHandler(
 
       // Return the result with the prepended context (if any) - modern API
       if (prependContext) {
+        injectedSessions.add(sessionId); // Mark this session as injected
         log.info(`[Hook:before-agent-start] Exit: session=${sessionId}, injected=${prependContext.length} chars`);
         return {
           prependContext,

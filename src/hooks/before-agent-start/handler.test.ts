@@ -873,4 +873,121 @@ describe('BeforeAgentStartHandler', () => {
       expect(result.prependContext).toContain('Work safely within these protections');
     });
   });
+
+  // =============================================================================
+  // SESSION STATE TRACKING TESTS
+  // =============================================================================
+
+  describe('Session State Tracking', () => {
+    it('should inject context only once per session', async () => {
+      const config = createTestConfig();
+      const handler = createBeforeAgentStartHandler(config);
+      const sessionId = 'test-session-123';
+
+      // First call - should inject
+      const result1 = await handler({
+        sessionId,
+        timestamp: Date.now(),
+      });
+
+      expect(result1.prependContext).toBeDefined();
+      expect(result1.prependContext).toContain('CLAWSEC SECURITY CONTEXT');
+      expect(result1.prependContext).toContain('Work safely within these protections');
+
+      // Second call - same session - should NOT inject
+      const result2 = await handler({
+        sessionId,
+        timestamp: Date.now(),
+      });
+
+      expect(result2).toEqual({}); // Empty result
+      expect(result2.prependContext).toBeUndefined();
+    });
+
+    it('should inject context for different sessions', async () => {
+      const config = createTestConfig();
+      const handler = createBeforeAgentStartHandler(config);
+
+      // Session 1
+      const result1 = await handler({
+        sessionId: 'session-1',
+        timestamp: Date.now(),
+      });
+
+      expect(result1.prependContext).toBeDefined();
+      expect(result1.prependContext).toContain('CLAWSEC SECURITY CONTEXT');
+
+      // Session 2 (different) - should inject
+      const result2 = await handler({
+        sessionId: 'session-2',
+        timestamp: Date.now(),
+      });
+
+      expect(result2.prependContext).toBeDefined();
+      expect(result2.prependContext).toContain('CLAWSEC SECURITY CONTEXT');
+    });
+
+    it('should track multiple sessions independently', async () => {
+      const config = createTestConfig();
+      const handler = createBeforeAgentStartHandler(config);
+
+      // Session A - first call
+      const resultA1 = await handler({ sessionId: 'session-a', timestamp: Date.now() });
+      expect(resultA1.prependContext).toBeDefined();
+
+      // Session B - first call
+      const resultB1 = await handler({ sessionId: 'session-b', timestamp: Date.now() });
+      expect(resultB1.prependContext).toBeDefined();
+
+      // Session A - second call (should skip)
+      const resultA2 = await handler({ sessionId: 'session-a', timestamp: Date.now() });
+      expect(resultA2.prependContext).toBeUndefined();
+
+      // Session B - second call (should skip)
+      const resultB2 = await handler({ sessionId: 'session-b', timestamp: Date.now() });
+      expect(resultB2.prependContext).toBeUndefined();
+    });
+
+    it('should not inject if prompt injection is disabled', async () => {
+      const config = createTestConfig();
+      const handler = createBeforeAgentStartHandler(config, { injectPrompt: false });
+      const sessionId = 'test-session';
+
+      const result = await handler({
+        sessionId,
+        timestamp: Date.now(),
+      });
+
+      expect(result.prependContext).toBeUndefined();
+      expect(result).toEqual({});
+    });
+
+    it('should track sessions even with generated sessionIds', async () => {
+      const config = createTestConfig();
+      const handler = createBeforeAgentStartHandler(config);
+
+      // First call without sessionId - will generate one based on timestamp
+      const timestamp1 = 12345;
+      const result1 = await handler({
+        // @ts-expect-error Testing missing sessionId
+        timestamp: timestamp1,
+      });
+      expect(result1.prependContext).toBeDefined();
+
+      // Second call with same timestamp - should generate same sessionId and skip
+      const result2 = await handler({
+        // @ts-expect-error Testing missing sessionId
+        timestamp: timestamp1,
+      });
+      expect(result2.prependContext).toBeUndefined();
+
+      // Third call with different timestamp - should inject (new session)
+      const timestamp2 = 67890;
+      const result3 = await handler({
+        // @ts-expect-error Testing missing sessionId
+        timestamp: timestamp2,
+      });
+      expect(result3.prependContext).toBeDefined();
+    });
+  });
 });

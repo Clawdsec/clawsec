@@ -5,6 +5,8 @@
 
 import type { ActionContext, ActionHandler, ActionResult, ActionLogger, ApprovalMethod, PendingApproval } from './types.js';
 import { noOpLogger } from './types.js';
+import { getDefaultApprovalStore } from '../approval/store.js';
+import type { PendingApprovalInput } from '../approval/types.js';
 
 /**
  * Generate a UUID v4
@@ -76,6 +78,7 @@ function formatCategory(category: string): string {
     destructive: 'Destructive Command',
     secrets: 'Secrets/PII',
     exfiltration: 'Data Transfer',
+    unknown: 'Manual Approval',
   };
   return categoryNames[category] || category;
 }
@@ -152,6 +155,34 @@ export class ConfirmHandler implements ActionHandler {
     // Get timeout
     const timeout = getApprovalTimeout(context);
 
+    // Create full approval record for storage
+    const now = Date.now();
+    const approvalInput: PendingApprovalInput = {
+      id: approvalId,
+      createdAt: now,
+      expiresAt: now + (timeout * 1000),
+      detection: analysis.primaryDetection ? {
+        category: analysis.primaryDetection.category,
+        severity: analysis.primaryDetection.severity,
+        confidence: analysis.primaryDetection.confidence,
+        reason: analysis.primaryDetection.reason,
+      } : {
+        category: 'unknown', // No specific threat detected - manual approval
+        severity: 'medium',
+        confidence: 0.5,
+        reason: 'Manual approval required',
+      },
+      toolCall: {
+        toolName: toolCall.toolName,
+        toolInput: toolCall.toolInput || {},
+      },
+    };
+
+    // Store the approval record
+    const store = getDefaultApprovalStore();
+    store.add(approvalInput);
+
+    // Create lightweight object for ActionResult
     const pendingApproval: PendingApproval = {
       id: approvalId,
       timeout,

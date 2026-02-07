@@ -15,12 +15,13 @@ export type AnalysisAction = 'allow' | 'block' | 'confirm' | 'warn' | 'log';
 /**
  * Threat categories that can be detected
  */
-export type ThreatCategory = 
+export type ThreatCategory =
   | 'purchase'
   | 'website'
   | 'destructive'
   | 'secrets'
-  | 'exfiltration';
+  | 'exfiltration'
+  | 'unknown';
 
 /**
  * Detection context provided to the engine

@@ -411,7 +411,7 @@ export class HybridAnalyzer implements Analyzer {
       severity: 'low' as Severity,
       confidence: 0,
       reason: `${category} detection disabled`,
-    };
+    } as AnyDetectionResult;
   }
 
   /**

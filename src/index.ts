@@ -39,7 +39,7 @@ export type Action = 'block' | 'confirm' | 'agent-confirm' | 'warn' | 'log';
 /**
  * Categories of security threats
  */
-export type ThreatCategory = 'purchase' | 'website' | 'destructive' | 'secrets' | 'exfiltration';
+export type ThreatCategory = 'purchase' | 'website' | 'destructive' | 'secrets' | 'exfiltration' | 'unknown';
 
 /**
  * Base context provided to all hooks
