@@ -12,7 +12,6 @@ import type {
 } from '../../index.js';
 import type { ClawsecConfig } from '../../config/schema.js';
 import type { SecretsDetectionResult } from '../../detectors/secrets/types.js';
-import { createSecretsDetector } from '../../detectors/secrets/index.js';
 import { scan, sanitize } from '../../sanitization/scanner.js';
 import type { ScannerConfig } from '../../sanitization/types.js';
 import { filterOutput } from './filter.js';
@@ -115,12 +114,8 @@ export function createToolResultPersistHandler(
   const filterEnabled = options?.filter ?? true;
   const scanInjectionsEnabled = options?.scanInjections ?? true;
 
-  // Create secrets detector from config
-  const secretsDetector = createSecretsDetector({
-    enabled: config.rules?.secrets?.enabled ?? true,
-    severity: config.rules?.secrets?.severity ?? 'critical',
-    action: config.rules?.secrets?.action ?? 'block',
-  }, log);
+  // Note: We don't use the async secrets detector here because this handler
+  // must be synchronous. The filterOutput function provides synchronous pattern matching.
 
   // Create scanner config from sanitization rules
   const sanitizationConfig = config.rules?.sanitization;
@@ -136,7 +131,7 @@ export function createToolResultPersistHandler(
     redactMatches: sanitizationConfig?.redactMatches ?? false,
   };
 
-  return async (context: ToolResultContext): Promise<ToolResultPersistResult> => {
+  return (context: ToolResultContext): ToolResultPersistResult => {
     const toolName = context.toolName;
     log.debug(`[Hook:tool-result-persist] Entry: tool=${toolName}`);
 
@@ -186,26 +181,11 @@ export function createToolResultPersistHandler(
       return createAllowResult();
     }
 
-    // 4. Run secrets detector on the tool output
-    log.debug(`[Hook:tool-result-persist] Scanning for secrets`);
-    let detections: SecretsDetectionResult[] = [];
-    try {
-      detections = await secretsDetector.detectAll({
-        toolName: context.toolName,
-        toolInput: context.toolInput,
-        toolOutput: toolOutputString,
-      });
-
-      if (detections.length > 0) {
-        const types = [...new Set(detections.map(d => d.metadata?.type || 'unknown'))];
-        log.info(`[Hook:tool-result-persist] Secrets detected: count=${detections.length}, types=${types.join(',')}`);
-      }
-    } catch (error) {
-      // CRITICAL BUG FIX: Log error instead of silent failure
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      log.error(`[Hook:tool-result-persist] Error scanning for secrets: ${errorMessage}, allowing unfiltered output`);
-      return createAllowResult();
-    }
+    // 4. Skip async secrets detector - filterOutput below does synchronous pattern matching
+    // Note: This handler must be synchronous per OpenClaw requirements
+    // The filterOutput function (line 211) catches secrets via regex patterns
+    log.debug(`[Hook:tool-result-persist] Using synchronous pattern matching for secrets`);
+    const detections: SecretsDetectionResult[] = [];
 
     // 5. Filter output with pattern matching (catches secrets detector might have missed)
     const filterResult = filterOutput(context.toolOutput, detections);

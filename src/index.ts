@@ -55,7 +55,8 @@ export interface HookContext {
  */
 export interface ToolCallContext extends HookContext {
   toolName: string;
-  toolInput: Record<string, unknown>;
+  toolInput?: Record<string, unknown>;  // Optional - may be 'params' instead
+  params?: Record<string, unknown>;     // Alternative field name from OpenClaw
   conversationHistory?: Array<{
     role: 'user' | 'assistant';
     content: string;
@@ -140,10 +141,11 @@ export interface ToolResultPersistResult {
 
 /**
  * Handler type for tool-result-persist hook
+ * Note: This hook must be synchronous per OpenClaw requirements
  */
 export type ToolResultPersistHandler = (
   context: ToolResultContext
-) => Promise<ToolResultPersistResult>;
+) => ToolResultPersistResult;
 
 /**
  * OpenClaw plugin API interface

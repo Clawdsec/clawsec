@@ -43,11 +43,12 @@ export interface BeforeToolCallHandlerOptions {
  * The engine context has a slightly different shape
  */
 function toEngineContext(hookContext: HookToolCallContext): EngineToolCallContext {
+  const toolInput = hookContext.toolInput || {};
   return {
     toolName: hookContext.toolName,
-    toolInput: hookContext.toolInput,
+    toolInput,
     // url can be extracted from toolInput if present
-    url: typeof hookContext.toolInput.url === 'string' ? hookContext.toolInput.url : undefined,
+    url: typeof toolInput.url === 'string' ? toolInput.url : undefined,
   };
 }
 
@@ -172,11 +173,18 @@ export function createBeforeToolCallHandler(
 
   return async (context: HookToolCallContext): Promise<BeforeToolCallResult> => {
     try {
-      const toolName = context.toolName;
+      // Normalize context: OpenClaw may send 'params' instead of 'toolInput'
+      // Support both field names for backward compatibility
+      const normalizedContext: HookToolCallContext = {
+        ...context,
+        toolInput: context.toolInput || (context as any).params || {},
+      };
+
+      const toolName = normalizedContext.toolName;
       log.info(`[Hook:before-tool-call] Entry: tool=${toolName}`);
 
-      // Validate context
-      if (!context || !context.toolName || !context.toolInput) {
+      // Validate context (using normalized version)
+      if (!normalizedContext || !normalizedContext.toolName || !normalizedContext.toolInput) {
         log.error(`[Hook:before-tool-call] Invalid context received`, context);
         return createAllowResult(); // Fail-open for invalid context
       }
@@ -190,21 +198,21 @@ export function createBeforeToolCallHandler(
       // 2. Check for agent-confirm parameter
     if (config.approval?.agentConfirm?.enabled !== false) {
       const confirmResult = agentConfirm.checkConfirmation(
-        context.toolInput,
+        normalizedContext.toolInput,
         confirmParamName
       );
 
       if (confirmResult.confirmed) {
         // Agent is trying to confirm a previous action
         const processResult = agentConfirm.processConfirmation(
-          context.toolInput,
+          normalizedContext.toolInput,
           confirmParamName
         );
 
         if (processResult.valid) {
           // Valid confirmation - strip the parameter and allow
           const strippedInput = agentConfirm.stripConfirmParameter(
-            context.toolInput,
+            normalizedContext.toolInput,
             confirmParamName
           );
           log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=allow (agent-confirm validated)`);
@@ -217,8 +225,8 @@ export function createBeforeToolCallHandler(
       }
     }
 
-    // 3. Run the analyzer
-    const engineContext = toEngineContext(context);
+    // 3. Run the analyzer (using normalized context)
+    const engineContext = toEngineContext(normalizedContext);
     const analysis = await analyzer.analyze(engineContext);
 
     // 4. If no detections or action is allow/log/warn, handle appropriately
