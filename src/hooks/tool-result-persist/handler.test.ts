@@ -993,4 +993,62 @@ describe('ToolResultPersistHandler', () => {
       expect(result.message.content).toContain('[REDACTED:credit-card]');
     });
   });
+
+  describe('Edge cases with undefined toolInput', () => {
+    it('should handle undefined toolInput without throwing', async () => {
+      const config = createTestConfig();
+      const handler = createToolResultPersistHandler(config);
+
+      // Simulate a context where toolInput is undefined (possible at runtime)
+      const context: ToolResultContext = {
+        toolName: 'some_tool',
+        toolInput: undefined as any, // Force undefined despite type
+        toolOutput: 'sk-abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmno',
+      };
+
+      // Should not throw the "Cannot use 'in' operator to search for 'command' in undefined" error
+      const result = await handler(context);
+
+      // Should still filter the output
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:openai-api-key]');
+      expect(result.message.redactions).toBeDefined();
+      expect(result.message.redactions.length).toBeGreaterThan(0);
+    });
+
+    it('should handle null toolInput without throwing', async () => {
+      const config = createTestConfig();
+      const handler = createToolResultPersistHandler(config);
+
+      const context: ToolResultContext = {
+        toolName: 'some_tool',
+        toolInput: null as any, // Force null despite type
+        toolOutput: 'password=supersecret123',
+      };
+
+      // Should not throw
+      const result = await handler(context);
+
+      // Should still filter the output
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:');
+    });
+
+    it('should handle empty object toolInput', async () => {
+      const config = createTestConfig();
+      const handler = createToolResultPersistHandler(config);
+
+      const context: ToolResultContext = {
+        toolName: 'some_tool',
+        toolInput: {},
+        toolOutput: 'AKIA1234567890EXAMPLE',
+      };
+
+      // Should work normally
+      const result = await handler(context);
+
+      expect(result.message).toBeDefined();
+      expect(result.message.content).toContain('[REDACTED:aws-access-key]');
+    });
+  });
 });

@@ -11,8 +11,8 @@ import type { Severity, Action } from '../../config/index.js';
 export interface SecretsDetectionContext {
   /** Name of the tool being invoked */
   toolName: string;
-  /** Input parameters to the tool */
-  toolInput: Record<string, unknown>;
+  /** Input parameters to the tool (may be undefined for certain tools) */
+  toolInput: Record<string, unknown> | undefined;
   /** Output from the tool (if scanning output) */
   toolOutput?: string;
 }

@@ -205,8 +205,8 @@ export class PurchaseDetectorImpl implements IPurchaseDetector {
     }
 
     // Try to extract amount from the tool input
-    const amount = extractAmountFromInput(context.toolInput);
-    
+    const amount = extractAmountFromInput(context.toolInput, this.logger);
+
     // If no amount found, use per-transaction limit as the assumed amount
     // This is a security-first approach - assume worst case if unknown
     const effectiveAmount = amount ?? limits.perTransaction;

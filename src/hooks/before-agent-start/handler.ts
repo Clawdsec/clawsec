@@ -47,28 +47,49 @@ export function createBeforeAgentStartHandler(
   const log = logger ?? createLogger(null, null);
   const injectPrompt = options?.injectPrompt ?? true;
 
-  return async (_context: AgentStartContext): Promise<BeforeAgentStartResult> => {
-    log.debug(`[Hook:before-agent-start] Entry: injecting security context`);
+  return async (context: AgentStartContext): Promise<BeforeAgentStartResult> => {
+    try {
+      // Validate context first (before accessing properties)
+      if (!context || !context.sessionId) {
+        log.error(`[Hook:before-agent-start] Invalid context received`, context);
+        return {}; // Fail-open for invalid context
+      }
 
-    // If prompt injection is disabled via options, return empty result
-    if (!injectPrompt) {
-      log.debug(`[Hook:before-agent-start] Prompt injection disabled`);
+      const sessionId = context.sessionId;
+      log.info(`[Hook:before-agent-start] Entry: session=${sessionId}`);
+
+      // If prompt injection is disabled via options, return empty result
+      if (!injectPrompt) {
+        log.info(`[Hook:before-agent-start] Prompt injection disabled`);
+        return {};
+      }
+
+      // Build the security context prompt based on config
+      let prependContext: string | undefined;
+      try {
+        prependContext = buildSecurityContextPrompt(config);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        log.error(`[Hook:before-agent-start] Error building prompt: ${errorMessage}`, error);
+        return {}; // Fail-open: allow agent to start without security context
+      }
+
+      // Return the result with the prepended context (if any) - modern API
+      if (prependContext) {
+        log.info(`[Hook:before-agent-start] Exit: session=${sessionId}, injected=${prependContext.length} chars`);
+        return {
+          prependContext,
+        };
+      }
+
+      log.info(`[Hook:before-agent-start] Exit: session=${sessionId}, no prompt (rules disabled)`);
       return {};
+    } catch (error) {
+      // Top-level catch for any unexpected errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.error(`[Hook:before-agent-start] Unhandled error: ${errorMessage}`, error);
+      return {}; // Fail-open: allow agent to start without security context
     }
-
-    // Build the security context prompt based on config
-    const prependContext = buildSecurityContextPrompt(config);
-
-    // Return the result with the prepended context (if any) - modern API
-    if (prependContext) {
-      log.debug(`[Hook:before-agent-start] Exit: prompt built, length=${prependContext.length} chars`);
-      return {
-        prependContext,
-      };
-    }
-
-    log.debug(`[Hook:before-agent-start] Exit: no prompt additions`);
-    return {};
   };
 }
 

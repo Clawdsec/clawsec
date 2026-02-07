@@ -120,9 +120,14 @@ function combineResults(
 /**
  * Extract text content from tool input/output for scanning
  */
-function extractTextContent(obj: Record<string, unknown>): Map<string, string> {
+function extractTextContent(obj: Record<string, unknown> | undefined): Map<string, string> {
   const content = new Map<string, string>();
-  
+
+  // Guard against undefined/null input
+  if (!obj || typeof obj !== 'object') {
+    return content;
+  }
+
   const textFields = [
     'command', 'script', 'code', 'content', 'body', 'text',
     'message', 'response', 'output', 'result', 'data',

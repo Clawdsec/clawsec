@@ -171,16 +171,23 @@ export function createBeforeToolCallHandler(
   const confirmParamName = config.approval?.agentConfirm?.parameterName ?? '_clawsec_confirm';
 
   return async (context: HookToolCallContext): Promise<BeforeToolCallResult> => {
-    const toolName = context.toolName;
-    log.debug(`[Hook:before-tool-call] Entry: tool=${toolName}`);
+    try {
+      const toolName = context.toolName;
+      log.info(`[Hook:before-tool-call] Entry: tool=${toolName}`);
 
-    // 1. Check if plugin is disabled
-    if (config.global?.enabled === false) {
-      log.debug(`[Hook:before-tool-call] Plugin disabled, allowing tool`);
-      return createDisabledResult();
-    }
+      // Validate context
+      if (!context || !context.toolName || !context.toolInput) {
+        log.error(`[Hook:before-tool-call] Invalid context received`, context);
+        return createAllowResult(); // Fail-open for invalid context
+      }
 
-    // 2. Check for agent-confirm parameter
+      // 1. Check if plugin is disabled
+      if (config.global?.enabled === false) {
+        log.info(`[Hook:before-tool-call] Plugin disabled, allowing tool`);
+        return createDisabledResult();
+      }
+
+      // 2. Check for agent-confirm parameter
     if (config.approval?.agentConfirm?.enabled !== false) {
       const confirmResult = agentConfirm.checkConfirmation(
         context.toolInput,
@@ -229,10 +236,16 @@ export function createBeforeToolCallHandler(
 
     const actionResult = await executor.execute(actionContext);
 
-    // 6. Convert to BeforeToolCallResult
-    const result = toBeforeToolCallResult(actionResult, analysis.primaryDetection);
-    log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=${result.block ? 'block' : 'allow'}`);
-    return result;
+      // 6. Convert to BeforeToolCallResult
+      const result = toBeforeToolCallResult(actionResult, analysis.primaryDetection);
+      log.info(`[Hook:before-tool-call] Exit: tool=${toolName}, result=${result.block ? 'block' : 'allow'}`);
+      return result;
+    } catch (error) {
+      // Error handling: log and fail-open (allow the action)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.error(`[Hook:before-tool-call] Unhandled error: ${errorMessage}`, error);
+      return createAllowResult(); // Fail-open on errors
+    }
   };
 }
 

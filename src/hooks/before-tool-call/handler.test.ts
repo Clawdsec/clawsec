@@ -852,7 +852,9 @@ describe('BeforeToolCallHandler', () => {
       });
       const context = createTestToolCallContext();
 
-      await expect(handler(context)).rejects.toThrow('Analyzer failed');
+      // With error handling, errors are caught and handler returns allow (fail-open)
+      const result = await handler(context);
+      expect(result.block).toBe(false); // Fail-open on error
     });
 
     it('should handle executor errors gracefully', async () => {
@@ -875,7 +877,9 @@ describe('BeforeToolCallHandler', () => {
       });
       const context = createTestToolCallContext();
 
-      await expect(handler(context)).rejects.toThrow('Executor failed');
+      // With error handling, errors are caught and handler returns allow (fail-open)
+      const result = await handler(context);
+      expect(result.block).toBe(false); // Fail-open on error
     });
 
     it('should handle log action', async () => {

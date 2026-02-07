@@ -821,7 +821,7 @@ describe('BeforeAgentStartHandler', () => {
       expect(result.prependContext).toContain('_clawsec_confirm');
     });
 
-    it('should handle empty context', async () => {
+    it('should handle empty sessionId gracefully', async () => {
       const config = createTestConfig();
       const handler = createBeforeAgentStartHandler(config);
       const context: AgentStartContext = {
@@ -829,9 +829,42 @@ describe('BeforeAgentStartHandler', () => {
         timestamp: 0,
       };
 
+      // Empty sessionId triggers validation failure, returns empty result (fail-open)
       const result = await handler(context);
 
-      expect(result.prependContext).toBeDefined();
+      expect(result).toEqual({});
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle invalid context gracefully', async () => {
+      const config = createTestConfig();
+      const handler = createBeforeAgentStartHandler(config);
+
+      // @ts-expect-error Testing invalid context
+      const result = await handler(null);
+
+      expect(result).toEqual({}); // Fail-open
+    });
+
+    it('should handle context with missing sessionId', async () => {
+      const config = createTestConfig();
+      const handler = createBeforeAgentStartHandler(config);
+
+      // @ts-expect-error Testing malformed context
+      const result = await handler({});
+
+      expect(result).toEqual({}); // Fail-open
+    });
+
+    it('should handle context with undefined sessionId', async () => {
+      const config = createTestConfig();
+      const handler = createBeforeAgentStartHandler(config);
+
+      // @ts-expect-error Testing malformed context
+      const result = await handler({ sessionId: undefined, timestamp: Date.now() });
+
+      expect(result).toEqual({}); // Fail-open
     });
   });
 });
